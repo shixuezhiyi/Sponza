@@ -1,166 +1,444 @@
 #pragma once
 
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
+#ifndef TINYGLTF_IMPLEMENTATION
+#define TINYGLTF_IMPLEMENTATION
+#endif
+#ifndef STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#endif
+#ifndef STB_IMAGE_WRITE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#endif
+
+#include <tiny_gltf.h>
 #include <stb_image.h>
 #include <vector>
 #include "Shader.hpp"
 
 using namespace std;
+#ifndef MY_GLCHECK
+#define MY_GLCHECK
+#define glCheckError() glCheckError_(__FILE__, __LINE__)
 
-struct Vertex
+GLenum glCheckError_(const char *file, int line)
 {
-    // position
-    glm::vec3 Position;
-    // normal
-    glm::vec3 Normal;
-    // texCoords
-    glm::vec2 TexCoords;
-    // tangent
-    glm::vec3 Tangent;
-    // bitangent
-    glm::vec3 Bitangent;
-
-    Vertex(glm::vec3 P, glm::vec3 N, glm::vec2 texCoords, glm::vec3 T, glm::vec3 B) :
-            Position(P), Normal(N), TexCoords(texCoords), Tangent(T), Bitangent(B)
-    {}
-};
-
-struct Texture
-{
-    unsigned int id;
-    string type;
-    aiString path;
-
-    Texture()
-    {}
-
-};
-
-class Mesh
-{
-private:
-    vector<Vertex> _vertices;
-    vector<unsigned int> _indices;
-//    vector<Texture> _textures;
-    unsigned int VAO;
-public:
-    Mesh(const vector<Vertex> &vertices, const vector<unsigned int> &indices) : _vertices(vertices), _indices(indices)
+    GLenum errorCode;
+    while ((errorCode = glGetError()) != GL_NO_ERROR)
     {
-        setup();
+        std::string error;
+        switch (errorCode)
+        {
+            case GL_INVALID_ENUM:
+                error = "INVALID_ENUM";
+                break;
+            case GL_INVALID_VALUE:
+                error = "INVALID_VALUE";
+                break;
+            case GL_INVALID_OPERATION:
+                error = "INVALID_OPERATION";
+                break;
+            case GL_OUT_OF_MEMORY:
+                error = "OUT_OF_MEMORY";
+                break;
+            case GL_INVALID_FRAMEBUFFER_OPERATION:
+                error = "INVALID_FRAMEBUFFER_OPERATION";
+                break;
+        }
+        std::cout << error << " | " << file << " (" << line << ")" << std::endl;
+    }
+    return errorCode;
+}
+#endif
+
+struct MyMaterial
+{
+//    bool isDoubleSized;
+    bool hasNormal;
+    bool hasBaseColor;
+    bool hasMetallicRoughness;
+    unsigned int NormalTextID;
+    unsigned int BaseColorID;
+    unsigned int MetallicRoughnessTextureID;
+
+
+    void bind(Shader &shader)
+    {
+//        glCheckError();
+////        shader.setUniform("isDoubleSized",isDoubleSized);
+        shader.setUniform("hasNormal", hasNormal);
+        shader.setUniform("hasBaseColor", hasBaseColor);
+        shader.setUniform("hasMetallicRoughness", hasMetallicRoughness);
+        glActiveTexture(GL_TEXTURE0);
+        shader.setUniform("BaseColorTex", 0);
+        glBindTexture(GL_TEXTURE_2D, BaseColorID);
+        glActiveTexture(GL_TEXTURE1);
+        shader.setUniform("NormalTex", 1);
+        glBindTexture(GL_TEXTURE_2D, NormalTextID);
+        glActiveTexture(GL_TEXTURE2);
+        shader.setUniform("MetallicRoughnessTex", 2);
+        glBindTexture(GL_TEXTURE_2D, MetallicRoughnessTextureID);
+        glCheckError();
+    }
+};
+
+struct MyPrimitive
+{
+    unsigned int VAO;
+    MyMaterial material;
+    int mode;
+    unsigned long count;
+    int componentType;
+    unsigned long offset;
+
+
+    MyPrimitive(const tinygltf::Model &model, const int meshIndex, const int pIdx, const vector<unsigned int> &VBOs,
+                const vector<unsigned int> &TextureIDs,
+                const unsigned int defaultTexture)
+    {
+        glCheckError();
+        auto &primitive = model.meshes[meshIndex].primitives[pIdx];
+        mode = primitive.mode;
+        vector<pair<string, int>> preDefinedAttributes =
+                {
+                        {"POSITION",   0},
+                        {"NORMAL",     1},
+                        {"TEXCOORD_0", 2},
+                        {"TANGENT",    3}
+                };
+        glGenVertexArrays(1, &VAO);
+        glBindVertexArray(VAO);
+        for (auto &preDefinedAttribute: preDefinedAttributes)
+        {
+            auto attributeName = preDefinedAttribute.first;
+            auto attributeLocation = preDefinedAttribute.second;
+            auto it = primitive.attributes.find(attributeName);
+            if (it == primitive.attributes.end())
+                continue;
+            auto &accessor = model.accessors[it->second];
+            auto &bufferView = model.bufferViews[accessor.bufferView];
+            auto bufferIdx = bufferView.buffer;
+
+            glBindBuffer(GL_ARRAY_BUFFER, VBOs[bufferIdx]);
+            auto byteOffset = accessor.byteOffset + bufferView.byteOffset;
+            glEnableVertexAttribArray(attributeLocation);
+            glVertexAttribPointer(attributeLocation, accessor.type, accessor.componentType, GL_FALSE,
+                                  bufferView.byteStride,
+                                  (void *) byteOffset);
+        }
+        if (primitive.indices >= 0)
+        {
+            const auto &indicesAccessor = model.accessors[primitive.indices];
+            const auto &indicesBufferView = model.bufferViews[indicesAccessor.bufferView];
+            const auto bufferIndex = indicesBufferView.buffer;
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VBOs[bufferIndex]);
+            count = indicesAccessor.count;
+            componentType = indicesAccessor.componentType;
+            offset = indicesAccessor.byteOffset + indicesBufferView.byteOffset;
+        } else
+            cerr << "No indices" << endl;
+
+
+        auto materialIdx = primitive.material;
+        auto curMaterial = model.materials[materialIdx];
+        auto baseColorIdx = curMaterial.pbrMetallicRoughness.baseColorTexture.index;
+        auto normalTextIdx = curMaterial.normalTexture.index;
+        auto mrIdx = curMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
+        if (baseColorIdx >= 0)
+        {
+            material.BaseColorID = TextureIDs[baseColorIdx];
+            material.hasBaseColor = true;
+        } else
+        {
+            material.BaseColorID = defaultTexture;
+            material.hasBaseColor = false;
+        }
+        if (normalTextIdx >= 0)
+        {
+            material.NormalTextID = TextureIDs[normalTextIdx];
+            material.hasNormal = true;
+        } else
+        {
+            material.NormalTextID = defaultTexture;
+            material.hasNormal = false;
+        }
+        if (mrIdx >= 0)
+        {
+            material.MetallicRoughnessTextureID = TextureIDs[mrIdx];
+            material.hasMetallicRoughness = true;
+        } else
+        {
+            material.MetallicRoughnessTextureID = defaultTexture;
+            material.hasMetallicRoughness = false;
+        }
+        glCheckError();
     }
 
     void draw(Shader &shader)
     {
+        glCheckError();
+        material.bind(shader);
+        glBindVertexArray(VAO);
         shader.use();
-        glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(_indices.size()), GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
-    }
-
-private:
-    //创建 VAO
-    void setup()
-    {
-        unsigned int VBO, EBO;
-        glGenVertexArrays(1, &VAO);
-        glGenBuffers(1, &EBO);
-        glGenBuffers(1, &VBO);
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, _vertices.size() * sizeof(Vertex), &_vertices[0], GL_STATIC_DRAW);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, _indices.size() * sizeof(unsigned int), &_indices[0], GL_STATIC_DRAW);
-        glBindVertexArray(VAO);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) 0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, Normal));
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, TexCoords));
-        // vertex tangent
-        glEnableVertexAttribArray(3);
-        glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, Tangent));
-        // vertex bitangent
-        glEnableVertexAttribArray(4);
-        glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, Bitangent));
+        if (offset >= 0)
+            glDrawElements(mode, count, componentType, (void *) offset);
+        else
+            cerr << "Can't draw" << endl;
+        glCheckError();
     }
 };
 
-class Model
+
+class MyMesh
+{
+private:
+    vector<MyPrimitive> primitives;
+    glm::mat4 originModelMat;
+
+public:
+    MyMesh()
+    {}
+
+    MyMesh(const tinygltf::Model &model, const int meshIndex, const vector<unsigned int> &VBOs,
+           const vector<unsigned int> &TextureIDs, const unsigned int defaultTexture)
+    {
+        glCheckError();
+        for (int i = 0; i < model.meshes[meshIndex].primitives.size(); i++)
+        {
+            primitives.emplace_back(MyPrimitive(model, meshIndex, i, VBOs, TextureIDs, defaultTexture));
+        }
+        glCheckError();
+    }
+
+    void setModelMat(const glm::mat4 &m)
+    {
+        originModelMat = m;
+    }
+
+    void draw(Shader &shader)
+    {
+        glCheckError();
+        shader.setUniform("originModelMat", originModelMat);
+        for (auto &primitive: primitives)
+            primitive.draw(shader);
+        glCheckError();
+    }
+};
+
+class MyModel
 {
 private:
 //    vector<Texture> textures_loaded;
-    vector<Mesh> _meshes;
+    vector<unsigned int> VBOs;
+    vector<unsigned int> TextureIDs;
+    unsigned int whiteTexture;
+    vector<MyMesh> meshes;
 public:
-    Model(string path)
+    MyModel(string path)
     {
         loadModel("../Resources/" + path);
+        glCheckError();
     }
 
     void draw(Shader &shader)
     {
-        for (auto &mesh: _meshes)
+        glCheckError();
+        for (auto &mesh: meshes)
             mesh.draw(shader);
+        glCheckError();
     }
 
 private:
     void loadModel(string path)
     {
-        Assimp::Importer importer;
-        const aiScene *scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
-        if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+        whiteTexture = myTextureFromFile("../Resources/white.png");
+
+        tinygltf::Model model;
+        tinygltf::TinyGLTF loader;
+        string err;
+        string warn;
+        bool ret;
+        auto fileExtension = path.substr(path.rfind('.'));
+        if (fileExtension == ".glb")
+            ret = loader.LoadBinaryFromFile(&model, &err, &warn, path); // for binary Box(.glb)
+        else if (fileExtension == ".gltf")
+            ret = loader.LoadASCIIFromFile(&model, &err, &warn, path);
+        else
         {
-            cout << "ERROR::ASSIMP::" << importer.GetErrorString() << endl;
+            cerr << "not glb and gltf" << endl;
             return;
         }
-        processNode(scene->mRootNode, scene);
+        if (!warn.empty())
+        {
+            printf("Warn: %s\n", warn.c_str());
+        }
+
+        if (!err.empty())
+        {
+            printf("Err: %s\n", err.c_str());
+        }
+
+        if (!ret)
+        {
+            cout << "Failed to parse Box:  " << path << endl;
+            return;
+        }
+        buildBuffer(model);
+        buildTexture(model);
+        buildScene(model);
     }
 
-    void processNode(aiNode *node, const aiScene *scene)
+    void buildBuffer(const tinygltf::Model &model)
     {
-        for (unsigned int i = 0; i < node->mNumMeshes; i++)
+        for (auto i = 0; i < model.buffers.size(); i++)
         {
-            aiMesh *mesh = scene->mMeshes[node->mMeshes[i]];
-            _meshes.push_back(processMesh(mesh));
-        }
-
-        for (unsigned int i = 0; i < node->mNumChildren; i++)
-        {
-            processNode(node->mChildren[i], scene);
+            unsigned int VBO;
+            glGenBuffers(1, &VBO);
+            glBindBuffer(GL_ARRAY_BUFFER, VBO);
+            glBufferData(GL_ARRAY_BUFFER, model.buffers[i].data.size(), model.buffers[i].data.data(), GL_STATIC_DRAW);
+            VBOs.push_back(VBO);
         }
     }
 
-    Mesh processMesh(aiMesh *mesh)
+    void buildTexture(const tinygltf::Model &model)
     {
-        vector<Vertex> vertices;
-        vector<unsigned int> indices;
-        for (unsigned int i = 0; i < mesh->mNumVertices; i++)
+        for (auto i = 0; i < model.textures.size(); i++)
         {
-            glm::vec3 pos{mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z};
-            glm::vec3 normal{0.0f};
-            glm::vec3 tangent{0.0f};
-            glm::vec3 bitangents{0.0f};
-            glm::vec2 texCoords{0.0f};
-            if (mesh->HasNormals())
+            unsigned int textureID;
+            glGenTextures(1, &textureID);
+            glBindTexture(GL_TEXTURE_2D, textureID);
+            auto texture = model.textures[i];
+            auto minFilter =
+                    texture.sampler >= 0 && model.samplers[texture.sampler].minFilter != -1
+                    ? model.samplers[texture.sampler].minFilter
+                    : GL_LINEAR;
+            auto magFilter =
+                    texture.sampler >= 0 && model.samplers[texture.sampler].magFilter != -1
+                    ? model.samplers[texture.sampler].magFilter
+                    : GL_LINEAR;
+            auto wrapS = texture.sampler >= 0 ? model.samplers[texture.sampler].wrapS
+                                              : GL_REPEAT;
+            auto wrapT = texture.sampler >= 0 ? model.samplers[texture.sampler].wrapT
+                                              : GL_REPEAT;
+            const auto& image = model.images[texture.source];
+            //TODO:使用 GL_RGB就会有 BUG,我也不知道为啥
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, image.pixel_type,
+                         image.image.data());
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapS);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+//
+//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            if (minFilter == GL_NEAREST_MIPMAP_NEAREST ||
+                minFilter == GL_NEAREST_MIPMAP_LINEAR ||
+                minFilter == GL_LINEAR_MIPMAP_NEAREST ||
+                minFilter == GL_LINEAR_MIPMAP_LINEAR)
             {
-                normal = {mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z};
+                glGenerateMipmap(GL_TEXTURE_2D);
             }
-            if (mesh->HasTextureCoords(i))
-                texCoords = {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y};
-            if (mesh->HasTangentsAndBitangents())
-            {
-                tangent = {mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z};
-                bitangents = {mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z};
-            }
-            vertices.emplace_back(pos, normal, texCoords, tangent, bitangents);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            TextureIDs.push_back(textureID);
         }
-        for (unsigned int i = 0; i < mesh->mNumFaces; i++)
+    }
+
+    unsigned int myTextureFromFile(const char *path, bool gamma = false)
+    {
+        stbi_set_flip_vertically_on_load(true);
+        unsigned int textureID;
+        glGenTextures(1, &textureID);
+        int width, height, nrComponents;
+        unsigned char *data = stbi_load(path, &width, &height, &nrComponents, 0);
+        if (data)
         {
-            aiFace face = mesh->mFaces[i];
-            for (unsigned int j = 0; j < face.mNumIndices; j++)
-                indices.push_back(face.mIndices[j]);
+            GLenum format;
+            if (nrComponents == 1)
+                format = GL_RED;
+            else if (nrComponents == 3)
+                format = GL_RGB;
+            else if (nrComponents == 4)
+                format = GL_RGBA;
+
+            glBindTexture(GL_TEXTURE_2D, textureID);
+            glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+            glGenerateMipmap(GL_TEXTURE_2D);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            stbi_image_free(data);
+        } else
+        {
+            std::cout << "Texture failed to load at path: " << path << std::endl;
+            stbi_image_free(data);
         }
-        return Mesh(vertices, indices);
+
+        return textureID;
+    }
+
+    void buildScene(const tinygltf::Model &model)
+    {
+        for (auto sceneIdx = 0; sceneIdx < model.scenes.size(); sceneIdx++)
+        {
+            for (int nodeIdx = 0; nodeIdx < model.scenes[sceneIdx].nodes.size(); nodeIdx++)
+            {
+                buildNode(model, model.scenes[sceneIdx].nodes[nodeIdx]);
+            }
+        }
+    }
+
+    void buildNode(const tinygltf::Model &model, const int nodeIndex)
+    {
+        for (auto &childNodeIndex: model.nodes[nodeIndex].children)
+        {
+            buildNode(model, childNodeIndex);
+        }
+
+
+        auto nodeMatrix = model.nodes[nodeIndex].matrix;
+        glm::mat4 matrix(1.0f);
+        if (nodeMatrix.size() == 16)
+        {
+            matrix[0].x = nodeMatrix[0], matrix[0].y = nodeMatrix[1],
+            matrix[0].z = nodeMatrix[2], matrix[0].w = nodeMatrix[3];
+            matrix[1].x = nodeMatrix[4], matrix[1].y = nodeMatrix[5],
+            matrix[1].z = nodeMatrix[6], matrix[1].w = nodeMatrix[7];
+            matrix[2].x = nodeMatrix[8], matrix[2].y = nodeMatrix[9],
+            matrix[2].z = nodeMatrix[10], matrix[2].w = nodeMatrix[11];
+            matrix[3].x = nodeMatrix[12], matrix[3].y = nodeMatrix[13],
+            matrix[3].z = nodeMatrix[14], matrix[3].w = nodeMatrix[15];
+        } else
+        {
+            if (model.nodes[nodeIndex].translation.size() == 3)
+            {
+                glm::translate(matrix, glm::vec3(model.nodes[nodeIndex].translation[0],
+                                                 model.nodes[nodeIndex].translation[1],
+                                                 model.nodes[nodeIndex].translation[2]));
+            }
+            if (model.nodes[nodeIndex].rotation.size() == 4)
+            {
+                matrix *= glm::mat4_cast(glm::quat(model.nodes[nodeIndex].rotation[3],
+                                                   model.nodes[nodeIndex].rotation[0],
+                                                   model.nodes[nodeIndex].rotation[1],
+                                                   model.nodes[nodeIndex].rotation[2]));
+            }
+            if (model.nodes[nodeIndex].scale.size() == 3)
+            {
+                glm::scale(matrix, glm::vec3(model.nodes[nodeIndex].scale[0],
+                                             model.nodes[nodeIndex].scale[1],
+                                             model.nodes[nodeIndex].scale[2]));
+            }
+        }
+        if (model.nodes[nodeIndex].mesh >= 0)
+        {
+            auto mesh = MyMesh(model, model.nodes[nodeIndex].mesh, VBOs, TextureIDs, whiteTexture);
+            mesh.setModelMat(matrix);
+            meshes.push_back(mesh);
+        }
     }
 };
