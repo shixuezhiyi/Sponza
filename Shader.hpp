@@ -11,23 +11,56 @@
 #include <sstream>
 
 using namespace std;
+#ifndef MY_GLCHECK
+#define MY_GLCHECK
+#define glCheckError() glCheckError_(__FILE__, __LINE__)
+
+GLenum glCheckError_(const char *file, int line)
+{
+    GLenum errorCode;
+    while ((errorCode = glGetError()) != GL_NO_ERROR)
+    {
+        std::string error;
+        switch (errorCode)
+        {
+            case GL_INVALID_ENUM:
+                error = "INVALID_ENUM";
+                break;
+            case GL_INVALID_VALUE:
+                error = "INVALID_VALUE";
+                break;
+            case GL_INVALID_OPERATION:
+                error = "INVALID_OPERATION";
+                break;
+            case GL_OUT_OF_MEMORY:
+                error = "OUT_OF_MEMORY";
+                break;
+            case GL_INVALID_FRAMEBUFFER_OPERATION:
+                error = "INVALID_FRAMEBUFFER_OPERATION";
+                break;
+        }
+        std::cout << error << " | " << file << " (" << line << ")" << std::endl;
+    }
+    return errorCode;
+}
+
+#endif
 
 class Shader
 {
 private:
     GLuint _ShaderID;
-    bool _isUsed;
 public:
     //认为 shader 放在 Shaders 文件夹下 .vert与.frag
-    Shader(string shaderName)
+    Shader(string shaderName) : Shader("../Shaders/" + shaderName + ".vert", "../Shaders/" + shaderName + ".frag")
     {
-        string vertPath = "../Shaders/" + shaderName + ".vert";
-        string fragPath = "../Shaders/" + shaderName + ".frag";
-        new(this)Shader(vertPath, fragPath);
+
     }
 
     Shader(string vertPath, string fragPath)
     {
+        glCheckError();
+
         string vertexCode, fragmentCode;
         ifstream vShaderFile, fShaderFile;
         int success;
@@ -85,60 +118,85 @@ public:
         glLinkProgram(_ShaderID);
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
-        _isUsed = false;
+        glCheckError();
+
     }
 
     void setUniform(string name, glm::mat4 value)
     {
-        if (!_isUsed)
-            use();
+        glCheckError();
+        use();
         glUniformMatrix4fv(glGetUniformLocation(_ShaderID, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));
+        glCheckError();
     }
 
     void setUniform(const std::string &name, bool value)
     {
-        if (!_isUsed)
-            use();
+        glCheckError();
+
+        use();
         glUniform1i(glGetUniformLocation(_ShaderID, name.c_str()), (int) value);
+        glCheckError();
+
     }
 
     void setUniform(const std::string &name, int value)
     {
-        if (!_isUsed)
-            use();
+        glCheckError();
+
+        use();
         glUniform1i(glGetUniformLocation(_ShaderID, name.c_str()), value);
+        glCheckError();
+
     }
 
     void setUniform(const std::string &name, float value)
     {
-        if (!_isUsed)
-            use();
+        glCheckError();
+
+        use();
         glUniform1f(glGetUniformLocation(_ShaderID, name.c_str()), value);
+        glCheckError();
+
     }
+
     void setUniform(const std::string &name, glm::vec3 value)
     {
-        if (!_isUsed)
-            use();
+        glCheckError();
+
+        use();
         glUniform3f(glGetUniformLocation(_ShaderID, name.c_str()), value.x, value.y, value.z);
+        glCheckError();
+
     }
 
     void setUniform(const std::string &name, float x, float y, float z)
     {
-        if (!_isUsed)
-            use();
+        glCheckError();
+
+        use();
         glUniform3f(glGetUniformLocation(_ShaderID, name.c_str()), x, y, z);
+        glCheckError();
+
     }
+
     void setUniformBlock(string name, int index)
     {
-        if (!_isUsed)
-            use();
+        glCheckError();
+
+        use();
         glUniformBlockBinding(_ShaderID, glGetUniformBlockIndex(_ShaderID, name.data()), index);
+        glCheckError();
+
     }
+
 
     void use()
     {
-        _isUsed = true;
+        glCheckError();
+
         glUseProgram(_ShaderID);
+        glCheckError();
     }
 
 

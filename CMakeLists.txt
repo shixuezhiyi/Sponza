@@ -16,5 +16,3 @@ link_libraries("-framework Cocoa -framework OpenGL -framework IOKit -framework C
 add_executable(LearnOpenGL glad.c main.cpp) # glad.c 一定要填进去！
 # 链接 GLFW 库
 target_link_libraries(LearnOpenGL glfw3)
-find_package(assimp REQUIRED) # 添加assimp
-target_link_libraries(LearnOpenGL assimp)
