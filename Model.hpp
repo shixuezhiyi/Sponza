@@ -53,42 +53,42 @@ GLenum glCheckError_(const char *file, int line)
 struct MyMaterial
 {
 //    bool isDoubleSized;
-    bool hasNormal;
-    bool hasBaseColor;
-    bool hasMetallicRoughness;
-    unsigned int NormalTextID;
-    unsigned int BaseColorID;
-    unsigned int MetallicRoughnessTextureID;
+    bool hasNormal_;
+    bool hasBaseColor_;
+    bool hasMetallicRoughness_;
+    unsigned int normalTextID_;
+    unsigned int baseColorID_;
+    unsigned int metallicRoughnessTextureID_;
 
 
     void bind(Shader &shader)
     {
 //        glCheckError();
 ////        shader.setUniform("isDoubleSized",isDoubleSized);
-        shader.setUniform("hasNormal", hasNormal);
-        shader.setUniform("hasBaseColor", hasBaseColor);
-        shader.setUniform("hasMetallicRoughness", hasMetallicRoughness);
+        shader.setUniform("hasNormal", hasNormal_);
+        shader.setUniform("hasBaseColor", hasBaseColor_);
+        shader.setUniform("hasMetallicRoughness", hasMetallicRoughness_);
         glActiveTexture(GL_TEXTURE0);
         shader.setUniform("BaseColorTex", 0);
-        glBindTexture(GL_TEXTURE_2D, BaseColorID);
+        glBindTexture(GL_TEXTURE_2D, baseColorID_);
         glActiveTexture(GL_TEXTURE1);
         shader.setUniform("NormalTex", 1);
-        glBindTexture(GL_TEXTURE_2D, NormalTextID);
+        glBindTexture(GL_TEXTURE_2D, normalTextID_);
         glActiveTexture(GL_TEXTURE2);
         shader.setUniform("MetallicRoughnessTex", 2);
-        glBindTexture(GL_TEXTURE_2D, MetallicRoughnessTextureID);
+        glBindTexture(GL_TEXTURE_2D, metallicRoughnessTextureID_);
         glCheckError();
     }
 };
 
 struct MyPrimitive
 {
-    unsigned int VAO;
-    MyMaterial material;
-    int mode;
-    unsigned long count;
-    int componentType;
-    unsigned long offset;
+    unsigned int VAO_;
+    MyMaterial material_;
+    int mode_;
+    unsigned long count_;
+    int componentType_;
+    unsigned long offset_;
 
 
     MyPrimitive(const tinygltf::Model &model, const int meshIndex, const int pIdx, const vector<unsigned int> &VBOs,
@@ -97,7 +97,7 @@ struct MyPrimitive
     {
         glCheckError();
         auto &primitive = model.meshes[meshIndex].primitives[pIdx];
-        mode = primitive.mode;
+        mode_ = primitive.mode;
         vector<pair<string, int>> preDefinedAttributes =
                 {
                         {"POSITION",   0},
@@ -105,8 +105,8 @@ struct MyPrimitive
                         {"TEXCOORD_0", 2},
                         {"TANGENT",    3}
                 };
-        glGenVertexArrays(1, &VAO);
-        glBindVertexArray(VAO);
+        glGenVertexArrays(1, &VAO_);
+        glBindVertexArray(VAO_);
         for (auto &preDefinedAttribute: preDefinedAttributes)
         {
             auto attributeName = preDefinedAttribute.first;
@@ -131,9 +131,9 @@ struct MyPrimitive
             const auto &indicesBufferView = model.bufferViews[indicesAccessor.bufferView];
             const auto bufferIndex = indicesBufferView.buffer;
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VBOs[bufferIndex]);
-            count = indicesAccessor.count;
-            componentType = indicesAccessor.componentType;
-            offset = indicesAccessor.byteOffset + indicesBufferView.byteOffset;
+            count_ = indicesAccessor.count;
+            componentType_ = indicesAccessor.componentType;
+            offset_ = indicesAccessor.byteOffset + indicesBufferView.byteOffset;
         } else
             cerr << "No indices" << endl;
 
@@ -145,30 +145,30 @@ struct MyPrimitive
         auto mrIdx = curMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index;
         if (baseColorIdx >= 0)
         {
-            material.BaseColorID = TextureIDs[baseColorIdx];
-            material.hasBaseColor = true;
+            material_.baseColorID_ = TextureIDs[baseColorIdx];
+            material_.hasBaseColor_ = true;
         } else
         {
-            material.BaseColorID = defaultTexture;
-            material.hasBaseColor = false;
+            material_.baseColorID_ = defaultTexture;
+            material_.hasBaseColor_ = false;
         }
         if (normalTextIdx >= 0)
         {
-            material.NormalTextID = TextureIDs[normalTextIdx];
-            material.hasNormal = true;
+            material_.normalTextID_ = TextureIDs[normalTextIdx];
+            material_.hasNormal_ = true;
         } else
         {
-            material.NormalTextID = defaultTexture;
-            material.hasNormal = false;
+            material_.normalTextID_ = defaultTexture;
+            material_.hasNormal_ = false;
         }
         if (mrIdx >= 0)
         {
-            material.MetallicRoughnessTextureID = TextureIDs[mrIdx];
-            material.hasMetallicRoughness = true;
+            material_.metallicRoughnessTextureID_ = TextureIDs[mrIdx];
+            material_.hasMetallicRoughness_ = true;
         } else
         {
-            material.MetallicRoughnessTextureID = defaultTexture;
-            material.hasMetallicRoughness = false;
+            material_.metallicRoughnessTextureID_ = defaultTexture;
+            material_.hasMetallicRoughness_ = false;
         }
         glCheckError();
     }
@@ -176,11 +176,11 @@ struct MyPrimitive
     void draw(Shader &shader)
     {
         glCheckError();
-        material.bind(shader);
-        glBindVertexArray(VAO);
+        material_.bind(shader);
+        glBindVertexArray(VAO_);
         shader.use();
-        if (offset >= 0)
-            glDrawElements(mode, count, componentType, (void *) offset);
+        if (offset_ >= 0)
+            glDrawElements(mode_, count_, componentType_, (void *) offset_);
         else
             cerr << "Can't draw" << endl;
         glCheckError();
@@ -191,34 +191,38 @@ struct MyPrimitive
 class MyMesh
 {
 private:
-    vector<MyPrimitive> primitives;
-    glm::mat4 originModelMat;
-
+    vector<MyPrimitive> primitives_;
+    glm::mat4 originModelMat_;//gltf modelMat
+    glm::mat4 modelMat_;
 public:
     MyMesh()
     {}
 
     MyMesh(const tinygltf::Model &model, const int meshIndex, const vector<unsigned int> &VBOs,
-           const vector<unsigned int> &TextureIDs, const unsigned int defaultTexture)
+           const vector<unsigned int> &TextureIDs, const unsigned int defaultTexture,
+           glm::mat4 modelMat = glm::mat4(1.0))
     {
+        originModelMat_ = modelMat;
         glCheckError();
         for (int i = 0; i < model.meshes[meshIndex].primitives.size(); i++)
         {
-            primitives.emplace_back(MyPrimitive(model, meshIndex, i, VBOs, TextureIDs, defaultTexture));
+            primitives_.emplace_back(MyPrimitive(model, meshIndex, i, VBOs, TextureIDs, defaultTexture));
         }
         glCheckError();
     }
 
     void setModelMat(const glm::mat4 &m)
     {
-        originModelMat = m;
+        modelMat_ = m;
     }
 
-    void draw(Shader &shader)
+    void draw(Shader &shader, glm::mat4 model = glm::mat4{1.0})
     {
         glCheckError();
-        shader.setUniform("originModelMat", originModelMat);
-        for (auto &primitive: primitives)
+        modelMat_ = model;
+        auto shaderModelMat = modelMat_ * originModelMat_;
+        shader.setUniform("model", shaderModelMat);
+        for (auto &primitive: primitives_)
             primitive.draw(shader);
         glCheckError();
     }
@@ -228,10 +232,10 @@ class MyModel
 {
 private:
 //    vector<Texture> textures_loaded;
-    vector<unsigned int> VBOs;
-    vector<unsigned int> TextureIDs;
-    unsigned int whiteTexture;
-    vector<MyMesh> meshes;
+    vector<unsigned int> VBOs_;
+    vector<unsigned int> textureIDs_;
+    unsigned int whiteTexture_;
+    vector<MyMesh> meshes_;
 public:
     MyModel(string path)
     {
@@ -239,18 +243,18 @@ public:
         glCheckError();
     }
 
-    void draw(Shader &shader)
+    void draw(Shader &shader, glm::mat4 modelMat = glm::mat4{1.0})
     {
         glCheckError();
-        for (auto &mesh: meshes)
-            mesh.draw(shader);
+        for (auto &mesh: meshes_)
+            mesh.draw(shader, modelMat);
         glCheckError();
     }
 
 private:
     void loadModel(string path)
     {
-        whiteTexture = myTextureFromFile("../Resources/white.png");
+        whiteTexture_ = myTextureFromFile("../Resources/white.png");
 
         tinygltf::Model model;
         tinygltf::TinyGLTF loader;
@@ -295,7 +299,7 @@ private:
             glGenBuffers(1, &VBO);
             glBindBuffer(GL_ARRAY_BUFFER, VBO);
             glBufferData(GL_ARRAY_BUFFER, model.buffers[i].data.size(), model.buffers[i].data.data(), GL_STATIC_DRAW);
-            VBOs.push_back(VBO);
+            VBOs_.push_back(VBO);
         }
     }
 
@@ -306,6 +310,8 @@ private:
             unsigned int textureID;
             glGenTextures(1, &textureID);
             glBindTexture(GL_TEXTURE_2D, textureID);
+
+
             auto texture = model.textures[i];
             auto minFilter =
                     texture.sampler >= 0 && model.samplers[texture.sampler].minFilter != -1
@@ -319,7 +325,9 @@ private:
                                               : GL_REPEAT;
             auto wrapT = texture.sampler >= 0 ? model.samplers[texture.sampler].wrapT
                                               : GL_REPEAT;
-            const auto& image = model.images[texture.source];
+            const auto &image = model.images[texture.source];
+            if (texture.source == 16)
+                int a;
             //TODO:使用 GL_RGB就会有 BUG,我也不知道为啥
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, image.pixel_type,
                          image.image.data());
@@ -327,11 +335,6 @@ private:
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapT);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
-//
-//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
             if (minFilter == GL_NEAREST_MIPMAP_NEAREST ||
                 minFilter == GL_NEAREST_MIPMAP_LINEAR ||
@@ -341,7 +344,7 @@ private:
                 glGenerateMipmap(GL_TEXTURE_2D);
             }
             glBindTexture(GL_TEXTURE_2D, 0);
-            TextureIDs.push_back(textureID);
+            textureIDs_.push_back(textureID);
         }
     }
 
@@ -436,9 +439,8 @@ private:
         }
         if (model.nodes[nodeIndex].mesh >= 0)
         {
-            auto mesh = MyMesh(model, model.nodes[nodeIndex].mesh, VBOs, TextureIDs, whiteTexture);
-            mesh.setModelMat(matrix);
-            meshes.push_back(mesh);
+            auto mesh = MyMesh(model, model.nodes[nodeIndex].mesh, VBOs_, textureIDs_, whiteTexture_, matrix);
+            meshes_.push_back(mesh);
         }
     }
 };
