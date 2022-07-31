@@ -49,7 +49,7 @@ GLenum glCheckError_(const char *file, int line)
 class Shader
 {
 private:
-    GLuint _ShaderID;
+    GLuint shaderID_;
 public:
     //认为 shader 放在 Shaders 文件夹下 .vert与.frag
     Shader(string shaderName) : Shader("../Shaders/" + shaderName + ".vert", "../Shaders/" + shaderName + ".frag")
@@ -112,10 +112,10 @@ public:
             std::cerr << fragPath << "  :存在错误\n";
             std::cerr << infoLog << std::endl;
         }
-        _ShaderID = glCreateProgram();
-        glAttachShader(_ShaderID, vertexShader);
-        glAttachShader(_ShaderID, fragmentShader);
-        glLinkProgram(_ShaderID);
+        shaderID_ = glCreateProgram();
+        glAttachShader(shaderID_, vertexShader);
+        glAttachShader(shaderID_, fragmentShader);
+        glLinkProgram(shaderID_);
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
         glCheckError();
@@ -126,7 +126,7 @@ public:
     {
         glCheckError();
         use();
-        glUniformMatrix4fv(glGetUniformLocation(_ShaderID, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));
+        glUniformMatrix4fv(glGetUniformLocation(shaderID_, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));
         glCheckError();
     }
 
@@ -135,7 +135,7 @@ public:
         glCheckError();
 
         use();
-        glUniform1i(glGetUniformLocation(_ShaderID, name.c_str()), (int) value);
+        glUniform1i(glGetUniformLocation(shaderID_, name.c_str()), (int) value);
         glCheckError();
 
     }
@@ -145,7 +145,7 @@ public:
         glCheckError();
 
         use();
-        glUniform1i(glGetUniformLocation(_ShaderID, name.c_str()), value);
+        glUniform1i(glGetUniformLocation(shaderID_, name.c_str()), value);
         glCheckError();
 
     }
@@ -155,7 +155,7 @@ public:
         glCheckError();
 
         use();
-        glUniform1f(glGetUniformLocation(_ShaderID, name.c_str()), value);
+        glUniform1f(glGetUniformLocation(shaderID_, name.c_str()), value);
         glCheckError();
 
     }
@@ -165,7 +165,7 @@ public:
         glCheckError();
 
         use();
-        glUniform3f(glGetUniformLocation(_ShaderID, name.c_str()), value.x, value.y, value.z);
+        glUniform3f(glGetUniformLocation(shaderID_, name.c_str()), value.x, value.y, value.z);
         glCheckError();
 
     }
@@ -175,7 +175,7 @@ public:
         glCheckError();
 
         use();
-        glUniform3f(glGetUniformLocation(_ShaderID, name.c_str()), x, y, z);
+        glUniform3f(glGetUniformLocation(shaderID_, name.c_str()), x, y, z);
         glCheckError();
 
     }
@@ -185,7 +185,7 @@ public:
         glCheckError();
 
         use();
-        glUniformBlockBinding(_ShaderID, glGetUniformBlockIndex(_ShaderID, name.data()), index);
+        glUniformBlockBinding(shaderID_, glGetUniformBlockIndex(shaderID_, name.data()), index);
         glCheckError();
 
     }
@@ -195,7 +195,7 @@ public:
     {
         glCheckError();
 
-        glUseProgram(_ShaderID);
+        glUseProgram(shaderID_);
         glCheckError();
     }
 
