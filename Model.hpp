@@ -56,6 +56,7 @@ struct MyMaterial
     bool hasNormal_;
     bool hasBaseColor_;
     bool hasMetallicRoughness_;
+    bool hasTangent_;
     unsigned int normalTextID_;
     unsigned int baseColorID_;
     unsigned int metallicRoughnessTextureID_;
@@ -68,6 +69,9 @@ struct MyMaterial
         shader.setUniform("hasNormal", hasNormal_);
         shader.setUniform("hasBaseColor", hasBaseColor_);
         shader.setUniform("hasMetallicRoughness", hasMetallicRoughness_);
+        shader.setUniform("hasTangent", hasTangent_);
+
+
         glActiveTexture(GL_TEXTURE0);
         shader.setUniform("BaseColorTex", 0);
         glBindTexture(GL_TEXTURE_2D, baseColorID_);
@@ -95,6 +99,7 @@ struct MyPrimitive
                 const vector<unsigned int> &TextureIDs,
                 const unsigned int defaultTexture)
     {
+        material_.hasTangent_ = true;
         glCheckError();
         auto &primitive = model.meshes[meshIndex].primitives[pIdx];
         mode_ = primitive.mode;
@@ -112,8 +117,13 @@ struct MyPrimitive
             auto attributeName = preDefinedAttribute.first;
             auto attributeLocation = preDefinedAttribute.second;
             auto it = primitive.attributes.find(attributeName);
+            //所用的 Sponza 模型有 103 个 primitive,有1 个无 tangent,其余全有所有属性
+            //TODO:更加通用
             if (it == primitive.attributes.end())
+            {
+                material_.hasTangent_ = false;
                 continue;
+            }
             auto &accessor = model.accessors[it->second];
             auto &bufferView = model.bufferViews[accessor.bufferView];
             auto bufferIdx = bufferView.buffer;
@@ -216,10 +226,9 @@ public:
         modelMat_ = m;
     }
 
-    void draw(Shader &shader, glm::mat4 model = glm::mat4{1.0})
+    void draw(Shader &shader)
     {
         glCheckError();
-        modelMat_ = model;
         auto shaderModelMat = modelMat_ * originModelMat_;
         shader.setUniform("model", shaderModelMat);
         for (auto &primitive: primitives_)
@@ -237,17 +246,24 @@ private:
     unsigned int whiteTexture_;
     vector<MyMesh> meshes_;
 public:
-    MyModel(string path)
+    MyModel(string path, const glm::mat4 modelMat = glm::mat4{1.0})
     {
         loadModel("../Resources/" + path);
+        setModelMat(modelMat);
         glCheckError();
     }
 
-    void draw(Shader &shader, glm::mat4 modelMat = glm::mat4{1.0})
+    void setModelMat(const glm::mat4 modelMat)
+    {
+        for (auto &mesh: meshes_)
+            mesh.setModelMat(modelMat);
+    }
+
+    void draw(Shader &shader)
     {
         glCheckError();
         for (auto &mesh: meshes_)
-            mesh.draw(shader, modelMat);
+            mesh.draw(shader);
         glCheckError();
     }
 

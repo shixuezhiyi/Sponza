@@ -11,18 +11,19 @@
 #include "Camera.hpp"
 #include "Shader.hpp"
 #include "Model.hpp"
+#include "PointLight.hpp"
 
 //全局变量
-auto SCR_WIDTH = 1280;
-auto SCR_HEIGHT = 720;
+const auto SCR_WIDTH = 1280, SCR_HEIGHT = 720;
+const auto SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
-bool isFirstMouse = true;
 float lastX = SCR_WIDTH / 2.f, lastY = SCR_HEIGHT / 2.f;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
-bool firstMouse = true;
-string SponzaPath = "sponza-gltf/sponza.gltf";
-string BoxPath = "BoxWithSpace/Box with Spaces.gltf";
+bool isFirstMouse = true;
+string SponzaPath = "Sponza/sponza.gltf";
+
+
 //
 void processInput(GLFWwindow *window)
 {
@@ -31,21 +32,22 @@ void processInput(GLFWwindow *window)
 
 
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.ProcessKeyboard(FORWARD, deltaTime);
+        camera.ProcessKeyboard(CameraDefaultParameters::FORWARD, deltaTime);
 
 
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.ProcessKeyboard(BACKWARD, deltaTime);
+        camera.ProcessKeyboard(CameraDefaultParameters::BACKWARD, deltaTime);
 
 
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.ProcessKeyboard(LEFT, deltaTime);
+        camera.ProcessKeyboard(CameraDefaultParameters::LEFT, deltaTime);
 
 
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.ProcessKeyboard(RIGHT, deltaTime);
+        camera.ProcessKeyboard(CameraDefaultParameters::RIGHT, deltaTime);
 
-
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        camera.output();
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
@@ -65,11 +67,11 @@ void mouse_callback(GLFWwindow *window, double xposIn, double yposIn)
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
 
-    if (firstMouse)
+    if (isFirstMouse)
     {
         lastX = xpos;
         lastY = ypos;
-        firstMouse = false;
+        isFirstMouse = false;
     }
 
     float xoffset = xpos - lastX;
@@ -83,9 +85,9 @@ void mouse_callback(GLFWwindow *window, double xposIn, double yposIn)
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
 // ----------------------------------------------------------------------
-void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
+void scroll_callback(GLFWwindow *window, double xOffset, double yOffset)
 {
-    camera.ProcessMouseScroll(static_cast<float>(yoffset));
+    camera.ProcessMouseScroll(static_cast<float>(yOffset));
 }
 
 GLFWwindow *setup()
@@ -101,7 +103,7 @@ GLFWwindow *setup()
 
     // glfw window creation
     // --------------------
-    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Sponza", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -130,6 +132,38 @@ GLFWwindow *setup()
     return window;
 }
 
+unsigned int buildQuadVAO()
+{
+    unsigned int quadVAO, quadVBO;
+    float quadVertices[] = {
+            // positions        // texture Coords
+            -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+            1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+            1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+    };
+    // setup plane VAO
+    glGenVertexArrays(1, &quadVAO);
+    glGenBuffers(1, &quadVBO);
+    glBindVertexArray(quadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *) 0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *) (3 * sizeof(float)));
+
+    return quadVAO;
+}
+
+void renderQuad(unsigned int VAO, Shader &shader)
+{
+    glBindVertexArray(VAO);
+    shader.use();
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
+}
+
 int main()
 {
 
@@ -137,37 +171,58 @@ int main()
     glEnable(GL_DEPTH_TEST);
     glCheckError();
     Shader baseShader("Base");
+    Shader quadShader("QuadBase");
+    Shader pbrShader("PBR");
     glCheckError();
-//    // view与 projection
-//    unsigned int vpUBO;
-//    glGenBuffers(1, &vpUBO);
-//    glBindBuffer(GL_UNIFORM_BUFFER, vpUBO);
-//    glBufferData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), NULL, GL_STATIC_DRAW);
-//    glBindBufferBase(GL_UNIFORM_BUFFER, 0, vpUBO);
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
+    model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
+    MyModel sponza(SponzaPath, model);
+    DirectionLight light;
+    auto quadVAO = buildQuadVAO();
+    glCheckError();
+    GLuint shadowMapFBO;
+    glGenFramebuffers(1, &shadowMapFBO);
+    GLuint shadowMap;
+    glGenTextures(1, &shadowMap);
+    glBindTexture(GL_TEXTURE_2D, shadowMap);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT,
+                 nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glCheckError();
 
-    MyModel sponza(SponzaPath);
+
     while (!glfwWindowShouldClose(mainWindow))
     {
-        float currentFrame = static_cast<float>(glfwGetTime());
+        auto currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
         processInput(mainWindow);
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        baseShader.use();
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f,
-                                                10000.0f);
+        //Shadow map
+//        glViewport(0, 0, SHADOW_HEIGHT, SHADOW_HEIGHT);
+//        glBindBuffer(GL_FRAMEBUFFER, shadowMapFBO);
+//        glClear(GL_DEPTH_BUFFER_BIT);
+//        quadShader.use();
 
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+        pbrShader.use();
+        glm::mat4 projection = camera.GetProjectionMatrix((float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 300.0f);
         glm::mat4 view = camera.GetViewMatrix();
-        baseShader.setUniform("view", view);
-        baseShader.setUniform("projection", projection);
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model,
-                               glm::vec3(0.0f, 0.0f, 0.0f)); // translate it down so it's at the center of the scene
-        model = glm::scale(model,
-                           glm::vec3(1.0f, 1.0f, 1.0f));    // it's a bit too big for our scene, so scale it down
-        baseShader.setUniform("model", model);
-        sponza.draw(baseShader);
+        light.bind(pbrShader);
+        pbrShader.setUniform("view", view);
+        pbrShader.setUniform("projection", projection);
+        sponza.draw(pbrShader);
         glfwSwapBuffers(mainWindow);
         glfwPollEvents();
     }

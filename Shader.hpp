@@ -53,14 +53,10 @@ private:
 public:
     //认为 shader 放在 Shaders 文件夹下 .vert与.frag
     Shader(string shaderName) : Shader("../Shaders/" + shaderName + ".vert", "../Shaders/" + shaderName + ".frag")
-    {
-
-    }
+    {}
 
     Shader(string vertPath, string fragPath)
     {
-        glCheckError();
-
         string vertexCode, fragmentCode;
         ifstream vShaderFile, fShaderFile;
         int success;
@@ -119,85 +115,53 @@ public:
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
         glCheckError();
-
     }
 
     void setUniform(string name, glm::mat4 value)
     {
-        glCheckError();
         use();
         glUniformMatrix4fv(glGetUniformLocation(shaderID_, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));
-        glCheckError();
     }
 
     void setUniform(const std::string &name, bool value)
     {
-        glCheckError();
-
         use();
         glUniform1i(glGetUniformLocation(shaderID_, name.c_str()), (int) value);
-        glCheckError();
-
     }
 
     void setUniform(const std::string &name, int value)
     {
-        glCheckError();
-
         use();
         glUniform1i(glGetUniformLocation(shaderID_, name.c_str()), value);
-        glCheckError();
-
     }
 
     void setUniform(const std::string &name, float value)
     {
-        glCheckError();
-
         use();
         glUniform1f(glGetUniformLocation(shaderID_, name.c_str()), value);
-        glCheckError();
-
     }
 
     void setUniform(const std::string &name, glm::vec3 value)
     {
-        glCheckError();
-
         use();
         glUniform3f(glGetUniformLocation(shaderID_, name.c_str()), value.x, value.y, value.z);
-        glCheckError();
-
     }
 
     void setUniform(const std::string &name, float x, float y, float z)
     {
-        glCheckError();
-
         use();
         glUniform3f(glGetUniformLocation(shaderID_, name.c_str()), x, y, z);
-        glCheckError();
-
     }
 
     void setUniformBlock(string name, int index)
     {
-        glCheckError();
-
         use();
         glUniformBlockBinding(shaderID_, glGetUniformBlockIndex(shaderID_, name.data()), index);
-        glCheckError();
-
     }
 
 
     void use()
     {
-        glCheckError();
-
         glUseProgram(shaderID_);
-        glCheckError();
     }
-
-
 };

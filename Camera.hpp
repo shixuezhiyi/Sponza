@@ -7,13 +7,7 @@
 #include <vector>
 
 // Defines several possible options for camera movement. Used as abstraction to stay away from window-system specific input methods
-enum Camera_Movement
-{
-    FORWARD,
-    BACKWARD,
-    LEFT,
-    RIGHT
-};
+
 
 // Default camera values
 namespace CameraDefaultParameters
@@ -26,16 +20,24 @@ namespace CameraDefaultParameters
     const glm::vec3 POSITION = glm::vec3(0.0f, 0.0f, 0.0f);
     const glm::vec3 UP = glm::vec3(0.0f, 1.0f, 0.0f);
     const glm::vec3 FRONT = glm::vec3(0.0f, 0.0f, -1.0f);
+
+    enum Camera_Movement
+    {
+        FORWARD,
+        BACKWARD,
+        LEFT,
+        RIGHT
+    };
 }
 
 // An abstract camera class that processes input and calculates the corresponding Euler Angles, Vectors and Matrices for use in OpenGL
 class Camera
 {
-public:
+private:
     // camera Attributes
     glm::vec3 pos_;
     glm::vec3 front_;
-    glm::vec3 up;
+    glm::vec3 up_;
     glm::vec3 right_;
     glm::vec3 worldUp_;
     // euler Angles
@@ -45,11 +47,24 @@ public:
     float movementSpeed_;
     float mouseSensitivity_;
     float zoom_;
-
+public:
     // constructor with vectors
     Camera()
     {
         pos_ = CameraDefaultParameters::POSITION;
+        worldUp_ = CameraDefaultParameters::UP;
+        yaw_ = CameraDefaultParameters::YAW;
+        pitch_ = CameraDefaultParameters::PITCH;
+        front_ = CameraDefaultParameters::FRONT;
+        movementSpeed_ = CameraDefaultParameters::SPEED;
+        mouseSensitivity_ = CameraDefaultParameters::SENSITIVITY;
+        zoom_ = CameraDefaultParameters::ZOOM;
+        updateCameraVectors();
+    }
+
+    Camera(glm::vec3 pos)
+    {
+        pos_ = pos;
         worldUp_ = CameraDefaultParameters::UP;
         yaw_ = CameraDefaultParameters::YAW;
         pitch_ = CameraDefaultParameters::PITCH;
@@ -77,31 +92,36 @@ public:
     // returns the view matrix calculated using Euler Angles and the LookAt Matrix
     glm::mat4 GetViewMatrix() const
     {
-        return glm::lookAt(pos_, pos_ + front_, up);
+        return glm::lookAt(pos_, pos_ + front_, up_);
+    }
+
+    glm::mat4 GetProjectionMatrix(const float aspect, const float zNear, const float zFar) const
+    {
+        return glm::perspective(zoom_, aspect, zNear, zFar);
     }
 
     // processes input received from any keyboard-like input system. Accepts input parameter in the form of camera defined ENUM (to abstract it from windowing systems)
-    void ProcessKeyboard(Camera_Movement direction, float deltaTime)
+    void ProcessKeyboard(CameraDefaultParameters::Camera_Movement direction, float deltaTime)
     {
         float velocity = movementSpeed_ * deltaTime;
-        if (direction == FORWARD)
+        if (direction == CameraDefaultParameters::FORWARD)
             pos_ += front_ * velocity;
-        if (direction == BACKWARD)
+        if (direction == CameraDefaultParameters::BACKWARD)
             pos_ -= front_ * velocity;
-        if (direction == LEFT)
+        if (direction == CameraDefaultParameters::LEFT)
             pos_ -= right_ * velocity;
-        if (direction == RIGHT)
+        if (direction == CameraDefaultParameters::RIGHT)
             pos_ += right_ * velocity;
     }
 
     // processes input received from a mouse input system. Expects the offset value in both the x and y direction.
-    void ProcessMouseMovement(float xoffset, float yoffset, GLboolean constrainPitch = true)
+    void ProcessMouseMovement(float xOffset, float yOffset, GLboolean constrainPitch = true)
     {
-        xoffset *= mouseSensitivity_;
-        yoffset *= mouseSensitivity_;
+        xOffset *= mouseSensitivity_;
+        yOffset *= mouseSensitivity_;
 
-        yaw_ += xoffset;
-        pitch_ += yoffset;
+        yaw_ += xOffset;
+        pitch_ += yOffset;
 
         // make sure that when pitch is out of bounds, screen doesn't get flipped
         if (constrainPitch)
@@ -126,6 +146,13 @@ public:
             zoom_ = 45.0f;
     }
 
+    void output() const
+    {
+        std::cout << "Camera position: " << pos_.x << " " << pos_.y << " " << pos_.z << std::endl;
+        std::cout << "Camera front: " << front_.x << " " << front_.y << " " << front_.z << std::endl;
+        std::cout << "Camera up: " << up_.x << " " << up_.y << " " << up_.z << std::endl;
+    }
+
 private:
     // calculates the front vector from the Camera's (updated) Euler Angles
     void updateCameraVectors()
@@ -139,6 +166,6 @@ private:
         // also re-calculate the Right and Up vector
         right_ = glm::normalize(glm::cross(front_,
                                            worldUp_));  // normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
-        up = glm::normalize(glm::cross(right_, front_));
+        up_ = glm::normalize(glm::cross(right_, front_));
     }
 };
