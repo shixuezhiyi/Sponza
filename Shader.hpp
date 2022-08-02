@@ -55,8 +55,10 @@ public:
     Shader(string shaderName) : Shader("../Shaders/" + shaderName + ".vert", "../Shaders/" + shaderName + ".frag")
     {}
 
-    Shader(string vertPath, string fragPath)
+    Shader(string vertPath, string fragPath, string geomPath = "")
     {
+        shaderID_ = glCreateProgram();
+        string geometryCode;
         string vertexCode, fragmentCode;
         ifstream vShaderFile, fShaderFile;
         int success;
@@ -86,6 +88,36 @@ public:
         {
             std::cerr << "Can not find: " << fragPath << endl;
         }
+        if (!geomPath.empty())
+        {
+            ifstream gShaderFile;
+            gShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+            try
+            {
+                gShaderFile.open(fragPath);
+                stringstream gShaderStream;
+                gShaderStream << gShaderFile.rdbuf();
+                gShaderFile.close();
+                geometryCode = gShaderStream.str();
+            }
+            catch (std::ifstream::failure &e)
+            {
+                std::cerr << "Can not find: " << geomPath << endl;
+            }
+            unsigned int geometryShader;
+            const char *gShaderCode = geometryCode.c_str();
+            geometryShader = glCreateShader(GL_GEOMETRY_SHADER);
+            glShaderSource(geometryShader, 1, &gShaderCode, NULL);
+            glCompileShader(geometryShader);
+            glGetShaderiv(geometryShader, GL_COMPILE_STATUS, &success);
+            if (!success)
+            {
+                glGetShaderInfoLog(geometryShader, 512, NULL, infoLog);
+                std::cerr << vertPath << "  :存在错误\n";
+                std::cerr << "ERROR::SHADER::GEOMETRY::COMPILATION_FAILED\n" << infoLog << std::endl;
+            }
+            glAttachShader(shaderID_, geometryShader);
+        }
         const char *vShaderCode = vertexCode.c_str();
         const char *fShaderCode = fragmentCode.c_str();
         unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -97,7 +129,7 @@ public:
             glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
             std::cerr << vertPath << "  :存在错误\n";
             std::cerr << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
-        };
+        }
         unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
         glShaderSource(fragmentShader, 1, &fShaderCode, NULL);
         glCompileShader(fragmentShader);
@@ -108,7 +140,6 @@ public:
             std::cerr << fragPath << "  :存在错误\n";
             std::cerr << infoLog << std::endl;
         }
-        shaderID_ = glCreateProgram();
         glAttachShader(shaderID_, vertexShader);
         glAttachShader(shaderID_, fragmentShader);
         glLinkProgram(shaderID_);
