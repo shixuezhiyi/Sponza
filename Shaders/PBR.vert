@@ -13,29 +13,13 @@ out VertOut
     vec3 fragPos;
     vec2 texCoord;
     vec3 normal;
-    mat3 TBN;
 } vertOut;
 
-mat3 getTBN()
-{
-    mat3 normalMatrix = transpose(inverse(mat3(model)));
-    if (hasTangent)
-    {
-        vec3 T = normalize(normalMatrix * aTangent);
-        vec3 N = normalize(normalMatrix * aNormal);
-        vec3 B = normalize(cross(T, N));
-        mat3 TBN = transpose(mat3(T, B, N));
-        return TBN;
-    }
-    //TODO 手动计算
-    return normalMatrix;
-}
 
 void main()
 {
     gl_Position = projection * view * model * vec4(aPos, 1.0f);
     vertOut.texCoord = vec2(aTexCoord.x, 1 - aTexCoord.y);
-    vertOut.TBN = getTBN();
     vertOut.normal = aNormal;
     vertOut.fragPos = vec3(model * vec4(aPos, 1.0));
 }

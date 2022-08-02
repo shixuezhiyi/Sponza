@@ -61,11 +61,10 @@ struct MyMaterial
     unsigned int baseColorID_;
     unsigned int metallicRoughnessTextureID_;
 
-
     void bind(Shader &shader)
     {
-//        glCheckError();
 ////        shader.setUniform("isDoubleSized",isDoubleSized);
+        glCheckError();
         shader.setUniform("hasNormal", hasNormal_);
         shader.setUniform("hasBaseColor", hasBaseColor_);
         shader.setUniform("hasMetallicRoughness", hasMetallicRoughness_);
@@ -73,6 +72,8 @@ struct MyMaterial
 
 
         glActiveTexture(GL_TEXTURE0);
+        glCheckError();
+
         shader.setUniform("BaseColorTex", 0);
         glBindTexture(GL_TEXTURE_2D, baseColorID_);
         glActiveTexture(GL_TEXTURE1);
@@ -253,6 +254,8 @@ public:
         glCheckError();
     }
 
+    MyModel() = default;
+
     void setModelMat(const glm::mat4 modelMat)
     {
         for (auto &mesh: meshes_)
@@ -342,8 +345,6 @@ private:
             auto wrapT = texture.sampler >= 0 ? model.samplers[texture.sampler].wrapT
                                               : GL_REPEAT;
             const auto &image = model.images[texture.source];
-            if (texture.source == 16)
-                int a;
             //TODO:使用 GL_RGB就会有 BUG,我也不知道为啥
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, image.pixel_type,
                          image.image.data());
@@ -460,3 +461,4 @@ private:
         }
     }
 };
+

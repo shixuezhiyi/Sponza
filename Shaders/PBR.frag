@@ -9,16 +9,15 @@ uniform bool hasMetallicRoughness;
 uniform sampler2D BaseColorTex;
 uniform sampler2D NormalTex;
 uniform sampler2D MetallicRoughnessTex;
-uniform vec3 lightDir;
 uniform vec3 lightColor;
 uniform vec3 cameraPos;
+uniform vec3 lightPos;
 const float PI = 3.14159265359;
 in VertOut
 {
     vec3 fragPos;
     vec2 texCoord;
     vec3 normal;
-    mat3 TBN;
 } fragIn;
 
 float getMetallic()
@@ -108,19 +107,18 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-
-void main()
+vec3 microfacet()
 {
     vec3 normal = getNormal();
     float roughness = getRoughness();
     float metallic = getMetallic();
     vec3 albedo = getAlbedo();
-    vec3 lightD  = -lightDir;
+    vec3 lightD = normalize(lightPos - fragIn.fragPos);
+    float distance = length(lightPos - fragIn.fragPos);
+    float attenuation = 2.0 / (distance * distance);
+    vec3 radiance = lightColor * attenuation;
     vec3 viewDir = normalize(cameraPos - fragIn.fragPos);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
-
-    vec3 radiance = lightColor;
-    //lightDir是光源到物体
     vec3 halfV = normalize(viewDir + lightD);
     float NDF = normalDistirbution(halfV, normal, roughness);
     float G = GeometrySmith(normal, viewDir, lightD, roughness);
@@ -133,15 +131,26 @@ void main()
     kD *= 1.0 - metallic;
     float cosAlpha = max(dot(normal, lightD), 0.0);
     vec3 Lo = (kD * albedo / PI + specular) * radiance * cosAlpha;
-    vec3 ambient = vec3(0.03) * albedo;//环境光
+    vec3 ambient = vec3(0.1) * albedo;//环境光
     vec3 color = Lo + ambient;
+    return color;
+}
 
-    //HDR
-    color = color / (color + vec3(1.0));
-    //gamma
-    color = pow(color, vec3(1.0 / 2.2));
+vec3 HDRCorrection(vec3 color)
+{
+    return color / (color + vec3(1.0));
+}
 
+vec3 gammaCorrection(vec3 color)
+{
+    return pow(color, vec3(1.0 / 2.2));
+}
 
-
+void main()
+{
+    vec3 color = microfacet();
+    //    color = HDRCorrection(color);
+    color = gammaCorrection(color);
     FRAGCOLOR = vec4(color, 1.0);
 }
+

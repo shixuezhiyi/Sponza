@@ -141,17 +141,20 @@ public:
         glUniform1f(glGetUniformLocation(shaderID_, name.c_str()), value);
     }
 
+
     void setUniform(const std::string &name, glm::vec3 value)
     {
         use();
         glUniform3f(glGetUniformLocation(shaderID_, name.c_str()), value.x, value.y, value.z);
     }
 
+
     void setUniform(const std::string &name, float x, float y, float z)
     {
         use();
         glUniform3f(glGetUniformLocation(shaderID_, name.c_str()), x, y, z);
     }
+
 
     void setUniformBlock(string name, int index)
     {

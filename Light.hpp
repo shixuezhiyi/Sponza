@@ -6,10 +6,10 @@
 namespace LightDefaultParameters
 {
     //别问,问就是 roll 出来的
-    const glm::vec3 POSITION{-9.98629f, 15.9951f, -2.02774f};
+    const glm::vec3 POSITION{0.0f, 5.5f, 0.0f};
     const glm::vec3 DIRECTION{0.571362, -0.816137, 0.0864038};
     const glm::vec3 UP{0.806962, 0.577859, 0.122032};
-    const glm::vec3 INTENSITY{1.8f, 1.8f, 1.8f};
+    const glm::vec3 INTENSITY{15.f, 15.f, 15.f};
 }
 
 
@@ -27,7 +27,8 @@ public:
                    glm::vec3 intensity = LightDefaultParameters::INTENSITY,
                    glm::vec3 up = LightDefaultParameters::UP)
             : direction_(direction), pos_(pos), intensity_(intensity), up_(up)
-    {}
+    {
+    }
 
     glm::mat4 GetViewMatrix() const
     {
@@ -52,33 +53,46 @@ public:
 class PointLight
 {
 private:
-    glm::vec3 direction_;
     glm::vec3 pos_;
     glm::vec3 intensity_;
-    glm::vec3 up_;
+    MyModel sphere;
+    bool isVisible_;
+
 public:
-    PointLight(glm::vec3 direction = LightDefaultParameters::DIRECTION,
-               glm::vec3 pos = LightDefaultParameters::POSITION,
+    PointLight(glm::vec3 pos = LightDefaultParameters::POSITION,
                glm::vec3 intensity = LightDefaultParameters::INTENSITY,
-               glm::vec3 up = LightDefaultParameters::UP)
-            : direction_(direction), pos_(pos), intensity_(intensity), up_(up)
-    {}
-
-    glm::mat4 GetViewMatrix() const
+               const string &spherePath = "sphere/scene.gltf")
+            : pos_(pos), intensity_(intensity), sphere(MyModel(spherePath)),
+              isVisible_(false)
     {
-        return glm::lookAt(pos_, pos_ + direction_, up_);
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, pos);
+        model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+        sphere.setModelMat(model);
     }
 
-    glm::mat4
-    GetProjectionMatrix(const float left, const float right, const float top, const float bottom, const float near,
-                        const float far) const
-    {
-        return glm::ortho(left, right, bottom, top, near, far);
-    }
+
 
     void bind(Shader &shader)
     {
         shader.setUniform("lightPos", pos_);
         shader.setUniform("lightColor", intensity_);
     }
+
+    void setVisible(bool isVisible)
+    {
+        isVisible_ = isVisible;
+    }
+
+    void setVisible()
+    {
+        isVisible_ = !isVisible_;
+    }
+
+    void draw(Shader &shader)
+    {
+        if (isVisible_)
+            sphere.draw(shader);
+    }
+
 };

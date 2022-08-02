@@ -11,7 +11,7 @@
 #include "Camera.hpp"
 #include "Shader.hpp"
 #include "Model.hpp"
-#include "PointLight.hpp"
+#include "Light.hpp"
 
 //全局变量
 const auto SCR_WIDTH = 1280, SCR_HEIGHT = 720;
@@ -25,7 +25,7 @@ string SponzaPath = "Sponza/sponza.gltf";
 
 
 //
-void processInput(GLFWwindow *window)
+void processInput(GLFWwindow *window, PointLight &light)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
@@ -48,6 +48,12 @@ void processInput(GLFWwindow *window)
 
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
         camera.output();
+
+
+    if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS)
+        light.setVisible(true);
+    if (glfwGetKey(window, GLFW_KEY_L) == GLFW_RELEASE)
+        light.setVisible(false);
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
@@ -173,12 +179,13 @@ int main()
     Shader baseShader("Base");
     Shader quadShader("QuadBase");
     Shader pbrShader("PBR");
+    Shader lightShader("Light");
     glCheckError();
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
     model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
     MyModel sponza(SponzaPath, model);
-    DirectionLight light;
+    PointLight light;
     auto quadVAO = buildQuadVAO();
     glCheckError();
     GLuint shadowMapFBO;
@@ -205,20 +212,19 @@ int main()
         auto currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
-        processInput(mainWindow);
+        processInput(mainWindow, light);
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        //Shadow map
-//        glViewport(0, 0, SHADOW_HEIGHT, SHADOW_HEIGHT);
-//        glBindBuffer(GL_FRAMEBUFFER, shadowMapFBO);
-//        glClear(GL_DEPTH_BUFFER_BIT);
-//        quadShader.use();
 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
-        pbrShader.use();
         glm::mat4 projection = camera.GetProjectionMatrix((float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 300.0f);
         glm::mat4 view = camera.GetViewMatrix();
+        //draw light
+        lightShader.setUniform("view", view);
+        lightShader.setUniform("projection", projection);
+        light.draw(lightShader);
+
+
+        pbrShader.use();
         light.bind(pbrShader);
         pbrShader.setUniform("view", view);
         pbrShader.setUniform("projection", projection);

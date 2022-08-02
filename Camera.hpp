@@ -19,7 +19,7 @@ namespace CameraDefaultParameters
     const float ZOOM = 45.0f;
     const glm::vec3 POSITION = glm::vec3(0.0f, 0.0f, 0.0f);
     const glm::vec3 UP = glm::vec3(0.0f, 1.0f, 0.0f);
-    const glm::vec3 FRONT = glm::vec3(0.0f, 0.0f, -1.0f);
+    const glm::vec3 FRONT = glm::vec3(1.0f, 1.0f, 1.0f);
 
     enum Camera_Movement
     {
