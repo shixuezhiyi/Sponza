@@ -119,7 +119,7 @@ GLFWwindow *setup()
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
-    glfwSetScrollCallback(window, scroll_callback);
+//    glfwSetScrollCallback(window, scroll_callback);
 
     // tell GLFW to capture our mouse
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -170,6 +170,49 @@ void renderQuad(unsigned int VAO, Shader &shader)
     glBindVertexArray(0);
 }
 
+auto getShadowMapFBOAndTex()
+{
+    glCheckError();
+    GLuint shadowMapFBO;
+    glGenFramebuffers(1, &shadowMapFBO);
+    GLuint cubeShadowMap;
+    glGenTextures(1, &cubeShadowMap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, cubeShadowMap);
+    for (GLuint i = 0; i < 6; ++i)
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0,
+                     GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO);
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, cubeShadowMap, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glCheckError();
+    return make_tuple(shadowMapFBO, cubeShadowMap);
+}
+
+void renderCubeShadowMap(GLuint &FBO, PointLight &light, MyModel &scene, Shader &shader)
+{
+    glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+    glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    GLfloat aspect = (GLfloat) SHADOW_WIDTH / (GLfloat) SHADOW_HEIGHT;
+    GLfloat near = 1.0f;
+    GLfloat far = 100.0f;
+    glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), aspect, near, far);
+    shader.use();
+    shader.setUniform("shadowMatrices", light.getShadowTransforms(shadowProj));
+    shader.setUniform("lightPos", light.getPos());
+    shader.setUniform("farPlane", far);
+    scene.draw(shader);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+
 int main()
 {
 
@@ -180,32 +223,15 @@ int main()
     Shader quadShader("QuadBase");
     Shader pbrShader("PBR");
     Shader lightShader("Light");
+    Shader cubeShadowShader("../Shaders/SHADOW.vert", "../Shaders/SHADOW.frag", "../Shaders/SHADOW.geom");
+    Shader debugShader("Debug");
     glCheckError();
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
     model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
     MyModel sponza(SponzaPath, model);
     PointLight light;
-    auto quadVAO = buildQuadVAO();
-    glCheckError();
-    GLuint shadowMapFBO;
-    glGenFramebuffers(1, &shadowMapFBO);
-    GLuint shadowMap;
-    glGenTextures(1, &shadowMap);
-    glBindTexture(GL_TEXTURE_2D, shadowMap);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT,
-                 nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap, 0);
-    glDrawBuffer(GL_NONE);
-    glReadBuffer(GL_NONE);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glCheckError();
-
+    auto [shadowFBO, shadowTex] = getShadowMapFBOAndTex();
 
     while (!glfwWindowShouldClose(mainWindow))
     {
@@ -214,21 +240,25 @@ int main()
         lastFrame = currentFrame;
         processInput(mainWindow, light);
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        renderCubeShadowMap(shadowFBO, light, sponza, cubeShadowShader);
+        glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
         glm::mat4 projection = camera.GetProjectionMatrix((float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 300.0f);
         glm::mat4 view = camera.GetViewMatrix();
         //draw light
         lightShader.setUniform("view", view);
         lightShader.setUniform("projection", projection);
         light.draw(lightShader);
+        debugShader.use();
+        debugShader.setUniform("shadowMap", 4);
+        debugShader.setUniform("farPlane", 100.0f);
+        glActiveTexture(GL_TEXTURE4);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, shadowTex);
+        light.bind(debugShader);
+        debugShader.setUniform("view", view);
+        debugShader.setUniform("projection", projection);
+        sponza.draw(debugShader);
 
-
-        pbrShader.use();
-        light.bind(pbrShader);
-        pbrShader.setUniform("view", view);
-        pbrShader.setUniform("projection", projection);
-        sponza.draw(pbrShader);
         glfwSwapBuffers(mainWindow);
         glfwPollEvents();
     }

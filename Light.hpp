@@ -72,11 +72,15 @@ public:
     }
 
 
-
     void bind(Shader &shader)
     {
         shader.setUniform("lightPos", pos_);
         shader.setUniform("lightColor", intensity_);
+    }
+
+    auto getPos()
+    {
+        return pos_;
     }
 
     void setVisible(bool isVisible)
@@ -95,4 +99,23 @@ public:
             sphere.draw(shader);
     }
 
+
+    //cube shadow map 变换矩阵 right left top bottom near far
+    std::vector<glm::mat4> getShadowTransforms(glm::mat4 &shadowProj) const
+    {
+        std::vector<glm::mat4> shadowTransforms;
+        shadowTransforms.push_back(
+                shadowProj * glm::lookAt(pos_, pos_ + glm::vec3(1.0, 0.0, 0.0), glm::vec3(0.0, -1.0, 0.0)));
+        shadowTransforms.push_back(
+                shadowProj * glm::lookAt(pos_, pos_ + glm::vec3(-1.0, 0.0, 0.0), glm::vec3(0.0, -1.0, 0.0)));
+        shadowTransforms.push_back(
+                shadowProj * glm::lookAt(pos_, pos_ + glm::vec3(0.0, 1.0, 0.0), glm::vec3(0.0, 0.0, 1.0)));
+        shadowTransforms.push_back(
+                shadowProj * glm::lookAt(pos_, pos_ + glm::vec3(0.0, -1.0, 0.0), glm::vec3(0.0, 0.0, -1.0)));
+        shadowTransforms.push_back(
+                shadowProj * glm::lookAt(pos_, pos_ + glm::vec3(0.0, 0.0, 1.0), glm::vec3(0.0, -1.0, 0.0)));
+        shadowTransforms.push_back(
+                shadowProj * glm::lookAt(pos_, pos_ + glm::vec3(0.0, 0.0, -1.0), glm::vec3(0.0, -1.0, 0.0)));
+        return shadowTransforms;
+    }
 };
