@@ -6,6 +6,7 @@
 * glfw3
 * glm
 * tiny-gltf
+* glad
 
 ## 结果
 #### 基于microfacet的 gltf 模型渲染, 点光源
