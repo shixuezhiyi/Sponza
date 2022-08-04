@@ -64,7 +64,6 @@ struct MyMaterial
     void bind(Shader &shader)
     {
 ////        shader.setUniform("isDoubleSized",isDoubleSized);
-        glCheckError();
         shader.setUniform("hasNormal", hasNormal_);
         shader.setUniform("hasBaseColor", hasBaseColor_);
         shader.setUniform("hasMetallicRoughness", hasMetallicRoughness_);
@@ -72,7 +71,6 @@ struct MyMaterial
 
 
         glActiveTexture(GL_TEXTURE0);
-        glCheckError();
 
         shader.setUniform("BaseColorTex", 0);
         glBindTexture(GL_TEXTURE_2D, baseColorID_);
@@ -82,7 +80,6 @@ struct MyMaterial
         glActiveTexture(GL_TEXTURE2);
         shader.setUniform("MetallicRoughnessTex", 2);
         glBindTexture(GL_TEXTURE_2D, metallicRoughnessTextureID_);
-        glCheckError();
     }
 };
 
@@ -186,7 +183,6 @@ struct MyPrimitive
 
     void draw(Shader &shader)
     {
-        glCheckError();
         material_.bind(shader);
         glBindVertexArray(VAO_);
         shader.use();
@@ -194,7 +190,6 @@ struct MyPrimitive
             glDrawElements(mode_, count_, componentType_, (void *) offset_);
         else
             cerr << "Can't draw" << endl;
-        glCheckError();
     }
 };
 

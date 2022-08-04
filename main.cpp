@@ -224,7 +224,7 @@ int main()
     Shader pbrShader("PBR");
     Shader lightShader("Light");
     Shader cubeShadowShader("../Shaders/SHADOW.vert", "../Shaders/SHADOW.frag", "../Shaders/SHADOW.geom");
-    Shader debugShader("Debug");
+//    Shader debugShader("Debug");
     glCheckError();
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
@@ -249,15 +249,15 @@ int main()
         lightShader.setUniform("view", view);
         lightShader.setUniform("projection", projection);
         light.draw(lightShader);
-        debugShader.use();
-        debugShader.setUniform("shadowMap", 4);
-        debugShader.setUniform("farPlane", 100.0f);
+        pbrShader.use();
+        pbrShader.setUniform("shadowMap", 4);
+        pbrShader.setUniform("farPlane", 100.0f);
         glActiveTexture(GL_TEXTURE4);
         glBindTexture(GL_TEXTURE_CUBE_MAP, shadowTex);
-        light.bind(debugShader);
-        debugShader.setUniform("view", view);
-        debugShader.setUniform("projection", projection);
-        sponza.draw(debugShader);
+        light.bind(pbrShader);
+        pbrShader.setUniform("view", view);
+        pbrShader.setUniform("projection", projection);
+        sponza.draw(pbrShader);
 
         glfwSwapBuffers(mainWindow);
         glfwPollEvents();

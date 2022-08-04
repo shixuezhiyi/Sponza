@@ -9,6 +9,8 @@ uniform bool hasMetallicRoughness;
 uniform sampler2D BaseColorTex;
 uniform sampler2D NormalTex;
 uniform sampler2D MetallicRoughnessTex;
+uniform samplerCube shadowMap;
+uniform float farPlane;
 uniform vec3 lightColor;
 uniform vec3 cameraPos;
 uniform vec3 lightPos;
@@ -19,6 +21,17 @@ in VertOut
     vec2 texCoord;
     vec3 normal;
 } fragIn;
+
+
+float getVisibility()
+{
+    vec3 disToLight = fragIn.fragPos - lightPos;
+    float shadowDepth = texture(shadowMap, disToLight).r * farPlane;
+    float dis = length(disToLight);
+    return dis - 0.05 < shadowDepth ? 1.0 : 0.0;
+}
+
+
 
 float getMetallic()
 {
@@ -130,7 +143,7 @@ vec3 microfacet()
     vec3 kD = vec3(1.0) - kS;
     kD *= 1.0 - metallic;
     float cosAlpha = max(dot(normal, lightD), 0.0);
-    vec3 Lo = (kD * albedo / PI + specular) * radiance * cosAlpha;
+    vec3 Lo = (kD * albedo / PI + specular) * radiance * cosAlpha * getVisibility();
     vec3 ambient = vec3(0.1) * albedo;//环境光
     vec3 color = Lo + ambient;
     return color;
