@@ -10,6 +10,7 @@
 ## 结果
 #### 基于microfacet的 gltf 模型渲染, 点光源
 ![pbr 点光源渲染](./Screenshot/img.png)
+#### omnidirectional shadow maps
 ![omnidirectional shadow maps](./Screenshot/shadow.png)
 
 ## Reference: 
