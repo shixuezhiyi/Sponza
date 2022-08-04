@@ -14,6 +14,6 @@
 ![omnidirectional shadow maps](./Screenshot/shadow.png)
 
 ## Reference: 
-* [learnOpengl](https://learnopengl-cn.github.io/)
+* [learnOpenGL](https://learnopengl-cn.github.io/)
 
 
