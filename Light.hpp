@@ -6,7 +6,7 @@
 namespace LightDefaultParameters
 {
     //别问,问就是 roll 出来的
-    const glm::vec3 POSITION{0.0f, 5.5f, 0.0f};
+    const glm::vec3 POSITION{0.0f, 3.5f, 0.0f};
     const glm::vec3 DIRECTION{0.571362, -0.816137, 0.0864038};
     const glm::vec3 UP{0.806962, 0.577859, 0.122032};
     const glm::vec3 INTENSITY{15.f, 15.f, 15.f};

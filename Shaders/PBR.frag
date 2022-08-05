@@ -25,12 +25,43 @@ in VertOut
 
 float getVisibility()
 {
+    float bias = 0.05;
     vec3 disToLight = fragIn.fragPos - lightPos;
     float shadowDepth = texture(shadowMap, disToLight).r * farPlane;
     float dis = length(disToLight);
-    return dis - 0.05 < shadowDepth ? 1.0 : 0.0;
+    return dis - bias < shadowDepth ? 1.0 : 0.0;
 }
 
+
+float getVisibilityPCF()
+{
+    vec3 disToLight = fragIn.fragPos - lightPos;
+    float shadowDepth = texture(shadowMap, disToLight).r * farPlane;
+    float dis = length(disToLight);
+    float shadow = 0.0;
+    float bias = 0.05;
+    float sampleNum = 6.0;
+    float offset = 0.1;
+    for (float x = -offset; x < offset; x += offset / (sampleNum * 0.5))
+    {
+        for (float y = -offset; y < offset; y += offset / (sampleNum * 0.5))
+        {
+            for (float z = -offset; z < offset; z += offset / (sampleNum * 0.5))
+            {
+                float shadowDepth = texture(shadowMap, disToLight).r * farPlane;
+                if (dis - bias < shadowDepth)
+                shadow += 1.0;
+            }
+        }
+    }
+    return shadow / (sampleNum * sampleNum * sampleNum);
+}
+
+
+//float getVisibilityPCSS()
+//{
+//
+//}
 
 
 float getMetallic()
@@ -143,8 +174,8 @@ vec3 microfacet()
     vec3 kD = vec3(1.0) - kS;
     kD *= 1.0 - metallic;
     float cosAlpha = max(dot(normal, lightD), 0.0);
-    vec3 Lo = (kD * albedo / PI + specular) * radiance * cosAlpha * getVisibility();
-    vec3 ambient = vec3(0.1) * albedo;//环境光
+    vec3 Lo = (kD * albedo / PI + specular) * radiance * cosAlpha * getVisibilityPCF();
+    vec3 ambient = vec3(0.05) * albedo;//环境光
     vec3 color = Lo + ambient;
     return color;
 }
