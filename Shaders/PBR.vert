@@ -6,7 +6,6 @@ layout (location = 3) in vec3 aTangent;
 uniform mat4 projection;
 uniform mat4 view;
 uniform mat4 model;
-uniform bool hasTangent;
 out vec2 texCoord;
 out VertOut
 {
@@ -20,6 +19,6 @@ void main()
 {
     gl_Position = projection * view * model * vec4(aPos, 1.0f);
     vertOut.texCoord = vec2(aTexCoord.x, 1 - aTexCoord.y);
-    vertOut.normal = aNormal;
+    vertOut.normal = transpose(inverse(mat3(model))) * aNormal;
     vertOut.fragPos = vec3(model * vec4(aPos, 1.0));
 }
