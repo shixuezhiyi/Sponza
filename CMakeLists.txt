@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 # 生成项目（默认即可）
 project(LearnOpenGL)
 # 配置C++版本（默认即可）
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 # 头文件路径配置
 include_directories(/Users/tyq/CODE/learnOpenGL/Include) # 这里的路径指向项目目录下的 include 文件夹

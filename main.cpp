@@ -158,19 +158,12 @@ unsigned int buildQuadVAO()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *) 0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *) (3 * sizeof(float)));
-
     return quadVAO;
 }
 
-void renderQuad(unsigned int VAO, Shader &shader)
-{
-    glBindVertexArray(VAO);
-    shader.use();
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glBindVertexArray(0);
-}
 
-auto getShadowMapFBOAndTex()
+//shadowMap pass buffer
+auto buildShadowBuffer()
 {
     glCheckError();
     GLuint shadowMapFBO;
@@ -199,7 +192,7 @@ void renderCubeShadowMap(GLuint &FBO, PointLight &light, MyModel &scene, Shader 
 {
     glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
     glBindFramebuffer(GL_FRAMEBUFFER, FBO);
-    glClear(GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     GLfloat aspect = (GLfloat) SHADOW_WIDTH / (GLfloat) SHADOW_HEIGHT;
     GLfloat near = 1.0f;
     GLfloat far = 100.0f;
@@ -212,52 +205,143 @@ void renderCubeShadowMap(GLuint &FBO, PointLight &light, MyModel &scene, Shader 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+auto buildGBuffer()
+{
+    unsigned int gBuffer;
+    glGenFramebuffers(1, &gBuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+    GLuint gPosition, gNormalRoughness, gAlbedoMetallic;
+
+    glGenTextures(1, &gPosition);
+    glBindTexture(GL_TEXTURE_2D, gPosition);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPosition, 0);
+
+    glGenTextures(1, &gNormalRoughness);
+    glBindTexture(GL_TEXTURE_2D, gNormalRoughness);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormalRoughness, 0);
+
+    glGenTextures(1, &gAlbedoMetallic);
+    glBindTexture(GL_TEXTURE_2D, gAlbedoMetallic);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gAlbedoMetallic, 0);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cout << "Framebuffer not complete!" << std::endl;
+    GLuint attachments[3] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
+    glDrawBuffers(3, attachments);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return make_tuple(gBuffer, gPosition, gNormalRoughness, gAlbedoMetallic);
+}
+
+auto renderGBuffer(GLuint &FBO, MyModel &scene, Shader &shader)
+{
+    shader.use();
+    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+    glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glm::mat4 projection = camera.GetProjectionMatrix((float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 300.0f);
+    glm::mat4 view = camera.GetViewMatrix();
+    shader.setUniform("view", view);
+    shader.setUniform("projection", projection);
+    scene.draw(shader);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+auto renderScreen(unsigned int &quadVAO)
+{
+    if (quadVAO == 0)
+    {
+        unsigned int quadVBO;
+        float quadVertices[] = {
+                // positions        // texture Coords
+                -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+                -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+                1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+                1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+        };
+        // setup plane VAO
+        glGenVertexArrays(1, &quadVAO);
+        glGenBuffers(1, &quadVBO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *) 0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *) (3 * sizeof(float)));
+    }
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
+}
 
 int main()
 {
 
     auto mainWindow = setup();
     glEnable(GL_DEPTH_TEST);
-    glCheckError();
-    Shader baseShader("Base");
-    Shader quadShader("QuadBase");
-    Shader pbrShader("PBR");
     Shader lightShader("Light");
-    Shader cubeShadowShader("../Shaders/SHADOW.vert", "../Shaders/SHADOW.frag", "../Shaders/SHADOW.geom");
+    Shader cubeShadowShader("../Shaders/DeferredShading/SHADOW.vert", "../Shaders/DeferredShading/SHADOW.frag",
+                            "../Shaders/DeferredShading/SHADOW.geom");
+
+    Shader gBufferShader("DeferredShading/SecondPass");
+    Shader screenShader("DeferredShading/ThirdPass");
 //    Shader debugShader("Debug");
-    glCheckError();
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
     model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
     MyModel sponza(SponzaPath, model);
     PointLight light;
-    auto [shadowFBO, shadowTex] = getShadowMapFBOAndTex();
-
+    auto [shadowFBO, shadowTex] = buildShadowBuffer();
+    auto [gBuffer, gPosition, gNormalRoughness, gAlbedoMetallic] = buildGBuffer();
+    unsigned int quadVAO = 0;
     while (!glfwWindowShouldClose(mainWindow))
     {
         auto currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
         processInput(mainWindow, light);
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClearColor(0.9f, 0.9f, 0.9f, 1.0f);
         renderCubeShadowMap(shadowFBO, light, sponza, cubeShadowShader);
-        glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+        renderGBuffer(gBuffer, sponza, gBufferShader);
+
+        //draw screen
+        screenShader.use();
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glm::mat4 projection = camera.GetProjectionMatrix((float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 300.0f);
-        glm::mat4 view = camera.GetViewMatrix();
-        //draw light
-        lightShader.setUniform("view", view);
-        lightShader.setUniform("projection", projection);
-        light.draw(lightShader);
-        pbrShader.use();
-        pbrShader.setUniform("shadowMap", 4);
-        pbrShader.setUniform("farPlane", 100.0f);
-        glActiveTexture(GL_TEXTURE4);
+        glBindVertexArray(quadVAO);
+        screenShader.setUniform("gPosition", 0);
+        screenShader.setUniform("gNormalRoughness", 1);
+        screenShader.setUniform("gAlbedoMetallic", 2);
+        screenShader.setUniform("shadowMap", 3);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, gPosition);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, gNormalRoughness);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, gAlbedoMetallic);
+        glActiveTexture(GL_TEXTURE3);
         glBindTexture(GL_TEXTURE_CUBE_MAP, shadowTex);
-        light.bind(pbrShader);
-        pbrShader.setUniform("view", view);
-        pbrShader.setUniform("projection", projection);
-        sponza.draw(pbrShader);
+        renderScreen(quadVAO);
+
+
+//
+//        //draw light
+//        glm::mat4 projection = camera.GetProjectionMatrix((float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 300.0f);
+//        glm::mat4 view = camera.GetViewMatrix();
+//        lightShader.setUniform("view", view);
+//        lightShader.setUniform("projection", projection);
+//        light.draw(lightShader);
+
 
         glfwSwapBuffers(mainWindow);
         glfwPollEvents();
