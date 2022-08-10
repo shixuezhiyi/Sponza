@@ -2,20 +2,55 @@
 out vec4 FRAGCOLOR;
 
 in vec2 texCoord;
-uniform sampler2D gPosition;
+
+uniform sampler2D gPositionDepth;
 uniform sampler2D gNormalRoughness;
 uniform sampler2D gAlbedoMetallic;
 uniform samplerCube shadowMap;
-uniform float farPlane;
+uniform sampler2D texNoise;
+uniform float shadowFar;
 uniform vec3 lightColor;
 uniform vec3 lightPos;
 uniform vec3 cameraPos;
+uniform mat4 view;
+uniform mat4 projection;
+uniform vec2 screenWH;
+uniform vec3 SSAOKernel[64];
+
 const float PI = 3.14159265359;
+const int ssaoKnernelSize = 64;
+const float radius = 1.2;
+
+float getSSAO(vec3 normal, vec3 fragPos)
+{
+    vec2 noiseScale = screenWH / 4.0;
+    vec3 randomVec = texture(texNoise, texCoord * noiseScale).xyz;
+    vec3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
+    vec3 bitangent = cross(normal, tangent);
+    mat3 TBN = mat3(tangent, bitangent, normal);
+    float occlusion = 0.0;
+    for (int i = 0;i < ssaoKnernelSize; ++i)
+    {
+        vec3 point = TBN * SSAOKernel[i];
+        point = fragPos + point * radius;
+        vec4 offset = vec4(point, 1.0);
+        offset = projection * view * offset;
+        offset.xyz /= offset.w; // 透视划分
+        offset.xyz = offset.xyz * 0.5 + 0.5; // 变换到0.0 - 1.0的值域
+        float sampleDepth = - texture(gPositionDepth, offset.xy).w;
+        float rangeCheck = smoothstep(0.0, 1.0, radius / abs(fragPos.z - sampleDepth));
+        occlusion += (sampleDepth >= point.z ? 1.0 : 0.0) * rangeCheck;
+    }
+    occlusion = 1.0 - (occlusion / ssaoKnernelSize);
+    return occlusion;
+}
+
+
 
 float getVisibilityPCF(vec3 fragPos)
 {
     vec3 disToLight = fragPos - lightPos;
-    float shadowDepth = texture(shadowMap, disToLight).r * farPlane;
+    float shadowDepth = texture(shadowMap, disToLight).r * shadowFar;
     float dis = length(disToLight);
     float shadow = 0.0;
     float bias = 0.05;
@@ -27,7 +62,7 @@ float getVisibilityPCF(vec3 fragPos)
         {
             for (float z = -offset; z < offset; z += offset / (sampleNum * 0.5))
             {
-                float shadowDepth = texture(shadowMap, disToLight).r * farPlane;
+                float shadowDepth = texture(shadowMap, disToLight).r * shadowFar;
                 if (dis - bias < shadowDepth)
                 shadow += 1.0;
             }
@@ -74,7 +109,7 @@ vec3 microfacet()
     float roughness = texture(gNormalRoughness, texCoord).w;
     float metallic = texture(gAlbedoMetallic, texCoord).w;
     vec3 albedo = texture(gAlbedoMetallic, texCoord).xyz;
-    vec3 fragPos = texture(gPosition, texCoord).xyz;
+    vec3 fragPos = texture(gPositionDepth, texCoord).xyz;
     vec3 lightD = normalize(lightPos - fragPos);
     float distance = length(lightPos - fragPos);
     float attenuation = 2.0 / (distance * distance);
@@ -93,7 +128,7 @@ vec3 microfacet()
     kD *= 1.0 - metallic;
     float cosAlpha = max(dot(normal, lightD), 0.0);
     vec3 Lo = (kD * albedo / PI + specular) * radiance * cosAlpha * getVisibilityPCF(fragPos);
-    vec3 ambient = vec3(0.05) * albedo;//环境光
+    vec3 ambient = vec3(0.05) * albedo; //环境光
     vec3 color = Lo + ambient;
     return color;
 }
@@ -112,8 +147,9 @@ vec3 gammaCorrection(vec3 color)
 }
 void main()
 {
-    vec3 color = microfacet();
-    //    color = HDRCorrection(color);
-    color = gammaCorrection(color);
-    FRAGCOLOR = vec4(color, 1.0);
+    //    vec3 color = microfacet();
+    //    color = gammaCorrection(color);
+    vec3 normal = texture(gNormalRoughness, texCoord).xyz;
+    vec3 fragPos = texture(gPositionDepth, texCoord).xyz;
+    FRAGCOLOR = vec4(getSSAO(normal, fragPos), getSSAO(normal, fragPos), getSSAO(normal, fragPos), 1.0);
 }

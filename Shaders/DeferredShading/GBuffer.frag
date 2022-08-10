@@ -1,5 +1,5 @@
 #version 330
-layout (location = 0) out vec3 gPosition;
+layout (location = 0) out vec4 gPositionDepth;
 layout (location = 1) out vec4 gNormalRoughness;
 layout (location = 2) out vec4 gAlbedoMetallic;
 
@@ -10,12 +10,21 @@ uniform bool hasMetallicRoughness;
 uniform sampler2D BaseColorTex;
 uniform sampler2D NormalTex;
 uniform sampler2D MetallicRoughnessTex;
+uniform vec2 nearAndFar;
 in VertOut
 {
     vec3 fragPos;
     vec2 texCoord;
     vec3 normal;
 } fragIn;
+
+float LinearizeDepth(float depth)
+{
+    float near = nearAndFar.x;
+    float far = nearAndFar.y;
+    float z = depth * 2.0 - 1.0; // 回到NDC
+    return (2.0 * near * far) / (far + near - z * (far - near));
+}
 
 float getMetallic()
 {
@@ -68,7 +77,8 @@ vec3 getNormal()
 }
 void main()
 {
-    gPosition = fragIn.fragPos;
+    gPositionDepth.rgb = fragIn.fragPos;
+    gPositionDepth.a = LinearizeDepth(gl_FragCoord.z);
     gNormalRoughness.rgb = getNormal();
     gNormalRoughness.a = getRoughness();
     gAlbedoMetallic.rgb = getAlbedo();

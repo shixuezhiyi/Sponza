@@ -180,6 +180,12 @@ public:
         glUniform3f(glGetUniformLocation(shaderID_, name.c_str()), value.x, value.y, value.z);
     }
 
+    void setUniform(const std::string &name, const glm::vec2 &value) const
+    {
+        use();
+        glUniform2f(glGetUniformLocation(shaderID_, name.c_str()), value.x, value.y);
+    }
+
 
     void setUniform(const std::string &name, const float &x, const float &y, const float &z) const
     {

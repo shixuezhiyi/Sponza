@@ -3,6 +3,7 @@
 #include <stb_image.h>
 #include <glad/glad.h>
 #include <iostream>
+#include  <random>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -138,6 +139,7 @@ GLFWwindow *setup()
     return window;
 }
 
+
 unsigned int buildQuadVAO()
 {
     unsigned int quadVAO, quadVBO;
@@ -210,14 +212,16 @@ auto buildGBuffer()
     unsigned int gBuffer;
     glGenFramebuffers(1, &gBuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
-    GLuint gPosition, gNormalRoughness, gAlbedoMetallic;
+    GLuint gPositionDepth, gNormalRoughness, gAlbedoMetallic;
 
-    glGenTextures(1, &gPosition);
-    glBindTexture(GL_TEXTURE_2D, gPosition);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_FLOAT, NULL);
+    glGenTextures(1, &gPositionDepth);
+    glBindTexture(GL_TEXTURE_2D, gPositionDepth);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPosition, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPositionDepth, 0);
 
     glGenTextures(1, &gNormalRoughness);
     glBindTexture(GL_TEXTURE_2D, gNormalRoughness);
@@ -245,7 +249,7 @@ auto buildGBuffer()
     glDrawBuffers(3, attachments);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    return make_tuple(gBuffer, gPosition, gNormalRoughness, gAlbedoMetallic, gBufferDepth);
+    return make_tuple(gBuffer, gPositionDepth, gNormalRoughness, gAlbedoMetallic, gBufferDepth);
 }
 
 auto renderGBuffer(GLuint &FBO, MyModel &scene, Shader &shader)
@@ -258,6 +262,7 @@ auto renderGBuffer(GLuint &FBO, MyModel &scene, Shader &shader)
     glm::mat4 view = camera.GetViewMatrix();
     shader.setUniform("view", view);
     shader.setUniform("projection", projection);
+    shader.setUniform("nearAndFar", glm::vec2{0.1f, 300.0f});
     scene.draw(shader);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -290,17 +295,77 @@ auto renderScreen(unsigned int &quadVAO)
     glBindVertexArray(0);
 }
 
+//在半球内随机生成靠近球心的样本点
+auto buildSSAOKernel(const int sampleNum = 64)
+{
+    std::uniform_real_distribution<GLfloat> randomFloats(0.0, 1.0); // 随机浮点数，范围0.0 - 1.0
+    std::default_random_engine generator;
+    std::vector<glm::vec3> ssaoKernel;
+    for (GLuint i = 0; i < sampleNum; ++i)
+    {
+        glm::vec3 sample(
+                randomFloats(generator) * 2.0 - 1.0,
+                randomFloats(generator) * 2.0 - 1.0,
+                randomFloats(generator)
+        );
+        sample = glm::normalize(sample);
+        sample *= randomFloats(generator);
+        GLfloat scale = GLfloat(i) / GLfloat(sampleNum);
+        scale = 0.1 + scale * scale * 0.9;
+        sample *= scale;
+        ssaoKernel.push_back(sample);
+    }
+    return ssaoKernel;
+}
+
+
+//生成一个包含随机旋转向量的4x4纹理
+auto buildSSAONoiseTex()
+{
+    std::default_random_engine generator;
+    std::uniform_real_distribution<GLfloat> randomFloats(0.0, 1.0); // 随机浮点数，范围0.0 - 1.0
+    std::vector<glm::vec3> ssaoNoise;
+    for (GLuint i = 0; i < 16; i++)
+    {
+        glm::vec3 noise(
+                randomFloats(generator) * 2.0 - 1.0,
+                randomFloats(generator) * 2.0 - 1.0,
+                0.0f);
+        ssaoNoise.push_back(noise);
+    }
+    GLuint noiseTexture;
+    glGenTextures(1, &noiseTexture);
+    glBindTexture(GL_TEXTURE_2D, noiseTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, 4, 4, 0, GL_RGB, GL_FLOAT, &ssaoNoise[0]);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    return noiseTexture;
+}
+
+void setSSAOShaderUniform(Shader &shader)
+{
+    auto noiseTexture = buildSSAONoiseTex();
+    glActiveTexture(GL_TEXTURE4);
+    glBindTexture(GL_TEXTURE_2D, noiseTexture);
+    shader.setUniform("texNoise", 4);
+    auto kernel = buildSSAOKernel();
+    for (unsigned int i = 0; i < 64; ++i)
+        shader.setUniform("SSAOKernel[" + to_string(i) + "]", kernel[i]);
+}
+
+
 int main()
 {
 
     auto mainWindow = setup();
-    glEnable(GL_DEPTH_TEST);
-    Shader lightShader("Light");
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     Shader cubeShadowShader("../Shaders/DeferredShading/SHADOW.vert", "../Shaders/DeferredShading/SHADOW.frag",
                             "../Shaders/DeferredShading/SHADOW.geom");
 
-    Shader gBufferShader("DeferredShading/SecondPass");
-    Shader screenShader("DeferredShading/ThirdPass");
+    Shader gBufferShader("DeferredShading/GBuffer");
+    Shader screenShader("DeferredShading/Screen");
 //    Shader debugShader("Debug");
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
@@ -309,6 +374,7 @@ int main()
     PointLight light;
     auto [shadowFBO, shadowTex] = buildShadowBuffer();
     auto [gBuffer, gPosition, gNormalRoughness, gAlbedoMetallic, gBufferDepth] = buildGBuffer();
+    setSSAOShaderUniform(screenShader);
     unsigned int quadVAO = 0;
     while (!glfwWindowShouldClose(mainWindow))
     {
@@ -325,7 +391,12 @@ int main()
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glBindVertexArray(quadVAO);
-        screenShader.setUniform("gPosition", 0);
+        glm::mat4 projection = camera.GetProjectionMatrix((float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 300.0f);
+        glm::mat4 view = camera.GetViewMatrix();
+        screenShader.setUniform("view", view);
+        screenShader.setUniform("projection", projection);
+        screenShader.setUniform("screenWH", glm::vec2{float(SCR_WIDTH), float(SCR_HEIGHT)});
+        screenShader.setUniform("gPositionDepth", 0);
         screenShader.setUniform("gNormalRoughness", 1);
         screenShader.setUniform("gAlbedoMetallic", 2);
         screenShader.setUniform("shadowMap", 3);
@@ -338,7 +409,7 @@ int main()
         glActiveTexture(GL_TEXTURE3);
         glBindTexture(GL_TEXTURE_CUBE_MAP, shadowTex);
         light.bind(screenShader);
-        screenShader.setUniform("farPlane", 100.0f);
+        screenShader.setUniform("shadowFar", 100.0f);
         renderScreen(quadVAO);
         glfwSwapBuffers(mainWindow);
         glfwPollEvents();

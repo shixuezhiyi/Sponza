@@ -15,7 +15,9 @@
 ![omnidirectional shadow maps](./Screenshot/ShadowMap.png)
 #### 基本阴影
 ![shadow](./Screenshot/BasicShadow.png)
+#### SSAO
+![img.png](./Screenshot/SSAO.png)
 ## Reference: 
 * [learnOpenGL](https://learnopengl-cn.github.io/)
 
-
+`
