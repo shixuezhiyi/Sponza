@@ -2,10 +2,10 @@
 layout (location = 0) out vec4 gPositionDepth;
 layout (location = 1) out vec4 gNormalRoughness;
 layout (location = 2) out vec4 gAlbedoMetallic;
-
 uniform bool hasNormal;
 uniform bool hasBaseColor;
 uniform bool hasMetallicRoughness;
+uniform mat4 view;
 
 uniform sampler2D BaseColorTex;
 uniform sampler2D NormalTex;

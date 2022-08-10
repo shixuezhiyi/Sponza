@@ -23,6 +23,8 @@ const float radius = 1.2;
 
 float getSSAO(vec3 normal, vec3 fragPos)
 {
+    fragPos = (view * vec4(fragPos, 1.0)).xyz;
+    normal = transpose(inverse(mat3(view))) * normal;
     vec2 noiseScale = screenWH / 4.0;
     vec3 randomVec = texture(texNoise, texCoord * noiseScale).xyz;
     vec3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
@@ -34,7 +36,7 @@ float getSSAO(vec3 normal, vec3 fragPos)
         vec3 point = TBN * SSAOKernel[i];
         point = fragPos + point * radius;
         vec4 offset = vec4(point, 1.0);
-        offset = projection * view * offset;
+        offset = projection * offset;
         offset.xyz /= offset.w; // 透视划分
         offset.xyz = offset.xyz * 0.5 + 0.5; // 变换到0.0 - 1.0的值域
         float sampleDepth = - texture(gPositionDepth, offset.xy).w;
@@ -128,7 +130,7 @@ vec3 microfacet()
     kD *= 1.0 - metallic;
     float cosAlpha = max(dot(normal, lightD), 0.0);
     vec3 Lo = (kD * albedo / PI + specular) * radiance * cosAlpha * getVisibilityPCF(fragPos);
-    vec3 ambient = vec3(0.05) * albedo; //环境光
+    vec3 ambient = vec3(0.15) * albedo * getSSAO(normal, fragPos); //环境光
     vec3 color = Lo + ambient;
     return color;
 }
@@ -147,9 +149,8 @@ vec3 gammaCorrection(vec3 color)
 }
 void main()
 {
-    //    vec3 color = microfacet();
-    //    color = gammaCorrection(color);
-    vec3 normal = texture(gNormalRoughness, texCoord).xyz;
-    vec3 fragPos = texture(gPositionDepth, texCoord).xyz;
-    FRAGCOLOR = vec4(getSSAO(normal, fragPos), getSSAO(normal, fragPos), getSSAO(normal, fragPos), 1.0);
+    vec3 color = microfacet();
+    color = gammaCorrection(color);
+
+    FRAGCOLOR = vec4(color, 1.0);
 }

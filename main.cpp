@@ -252,14 +252,12 @@ auto buildGBuffer()
     return make_tuple(gBuffer, gPositionDepth, gNormalRoughness, gAlbedoMetallic, gBufferDepth);
 }
 
-auto renderGBuffer(GLuint &FBO, MyModel &scene, Shader &shader)
+auto renderGBuffer(GLuint &FBO, MyModel &scene, Shader &shader, const glm::mat4 &projection, const glm::mat4 &view)
 {
     shader.use();
     glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
     glBindFramebuffer(GL_FRAMEBUFFER, FBO);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glm::mat4 projection = camera.GetProjectionMatrix((float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 300.0f);
-    glm::mat4 view = camera.GetViewMatrix();
     shader.setUniform("view", view);
     shader.setUniform("projection", projection);
     shader.setUniform("nearAndFar", glm::vec2{0.1f, 300.0f});
@@ -382,17 +380,17 @@ int main()
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
         processInput(mainWindow, light);
+
+        glm::mat4 projection = camera.GetProjectionMatrix((float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 300.0f);
+        glm::mat4 view = camera.GetViewMatrix();
         glClearColor(0.9f, 0.9f, 0.9f, 1.0f);
         renderCubeShadowMap(shadowFBO, light, sponza, cubeShadowShader);
-        renderGBuffer(gBuffer, sponza, gBufferShader);
-
+        renderGBuffer(gBuffer, sponza, gBufferShader, projection, view);
         //draw screen
         screenShader.use();
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glBindVertexArray(quadVAO);
-        glm::mat4 projection = camera.GetProjectionMatrix((float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 300.0f);
-        glm::mat4 view = camera.GetViewMatrix();
         screenShader.setUniform("view", view);
         screenShader.setUniform("projection", projection);
         screenShader.setUniform("screenWH", glm::vec2{float(SCR_WIDTH), float(SCR_HEIGHT)});
