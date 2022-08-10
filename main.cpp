@@ -233,13 +233,19 @@ auto buildGBuffer()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gAlbedoMetallic, 0);
 
+    unsigned int gBufferDepth;
+    glGenRenderbuffers(1, &gBufferDepth);
+    glBindRenderbuffer(GL_RENDERBUFFER, gBufferDepth);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, gBufferDepth);
+
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         std::cout << "Framebuffer not complete!" << std::endl;
     GLuint attachments[3] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
     glDrawBuffers(3, attachments);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    return make_tuple(gBuffer, gPosition, gNormalRoughness, gAlbedoMetallic);
+    return make_tuple(gBuffer, gPosition, gNormalRoughness, gAlbedoMetallic, gBufferDepth);
 }
 
 auto renderGBuffer(GLuint &FBO, MyModel &scene, Shader &shader)
@@ -302,7 +308,7 @@ int main()
     MyModel sponza(SponzaPath, model);
     PointLight light;
     auto [shadowFBO, shadowTex] = buildShadowBuffer();
-    auto [gBuffer, gPosition, gNormalRoughness, gAlbedoMetallic] = buildGBuffer();
+    auto [gBuffer, gPosition, gNormalRoughness, gAlbedoMetallic, gBufferDepth] = buildGBuffer();
     unsigned int quadVAO = 0;
     while (!glfwWindowShouldClose(mainWindow))
     {
@@ -331,18 +337,9 @@ int main()
         glBindTexture(GL_TEXTURE_2D, gAlbedoMetallic);
         glActiveTexture(GL_TEXTURE3);
         glBindTexture(GL_TEXTURE_CUBE_MAP, shadowTex);
+        light.bind(screenShader);
+        screenShader.setUniform("farPlane", 100.0f);
         renderScreen(quadVAO);
-
-
-//
-//        //draw light
-//        glm::mat4 projection = camera.GetProjectionMatrix((float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 300.0f);
-//        glm::mat4 view = camera.GetViewMatrix();
-//        lightShader.setUniform("view", view);
-//        lightShader.setUniform("projection", projection);
-//        light.draw(lightShader);
-
-
         glfwSwapBuffers(mainWindow);
         glfwPollEvents();
     }

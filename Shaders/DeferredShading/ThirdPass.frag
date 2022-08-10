@@ -112,10 +112,8 @@ vec3 gammaCorrection(vec3 color)
 }
 void main()
 {
-    //    vec3 color = microfacet();
+    vec3 color = microfacet();
     //    color = HDRCorrection(color);
-    vec3 albedo = texture(gAlbedoMetallic, texCoord).xyz;
-    vec3 normal = texture(gNormalRoughness, texCoord).xyz;
-//    albedo = gammaCorrection(albedo);
-    FRAGCOLOR = vec4(normal, 1.0);
+    color = gammaCorrection(color);
+    FRAGCOLOR = vec4(color, 1.0);
 }
