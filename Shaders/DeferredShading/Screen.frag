@@ -49,6 +49,7 @@ float getSSAO(vec3 normal, vec3 fragPos)
 
 
 
+
 float getVisibilityPCF(vec3 fragPos)
 {
     vec3 disToLight = fragPos - lightPos;
